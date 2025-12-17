@@ -1,29 +1,22 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using SleepingQueens.Shared.Data.Repositories;
-using SleepingQueens.Shared.GameEngine;        // IGameEngine from Shared
+using SleepingQueens.Server.Data.Repositories;
+using SleepingQueens.Server.GameEngine;        // IGameEngine from Shared
 using SleepingQueens.Shared.Models.DTOs;       // DTOs from Shared
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;       // Domain models from Shared
 
 namespace SleepingQueens.Server.Hubs;
 
-public class GameHub : Hub
+public class GameHub(
+    IGameEngine gameEngine,
+    IGameRepository gameRepository,
+    ILogger<GameHub> logger) : Hub
 {
-    private readonly IGameEngine _gameEngine;
-    private readonly IGameRepository _gameRepository;
-    private readonly ILogger<GameHub> _logger;
-    private static readonly Dictionary<string, Guid> _connectionPlayerMap = new();
-    private static readonly Dictionary<Guid, string> _playerConnectionMap = new();
-
-    public GameHub(
-        IGameEngine gameEngine,
-        IGameRepository gameRepository,
-        ILogger<GameHub> logger)
-    {
-        _gameEngine = gameEngine;
-        _gameRepository = gameRepository;
-        _logger = logger;
-    }
+    private readonly IGameEngine _gameEngine = gameEngine;
+    private readonly IGameRepository _gameRepository = gameRepository;
+    private readonly ILogger<GameHub> _logger = logger;
+    private static readonly Dictionary<string, Guid> _connectionPlayerMap = [];
+    private static readonly Dictionary<Guid, string> _playerConnectionMap = [];
 
     // ========== CONNECTION MANAGEMENT ==========
 
@@ -171,12 +164,12 @@ public class GameHub : Hub
                 {
                     GameId = gameId,
                     StartedAt = startedGame.StartedAt!.Value,
-                    Players = startedGame.Players.Select(p => new PlayerInfo
+                    Players = [.. startedGame.Players.Select(p => new PlayerInfo
                     {
                         Id = p.Id,
                         Name = p.Name,
                         IsCurrentTurn = p.IsCurrentTurn
-                    }).ToList()
+                    })]
                 });
 
             // Send initial game state to all players

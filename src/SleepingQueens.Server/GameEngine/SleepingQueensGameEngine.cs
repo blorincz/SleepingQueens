@@ -1,29 +1,20 @@
 ﻿using System.Text.Json;
-using Microsoft.Extensions.Logging;
-using SleepingQueens.Shared.GameEngine;        // IGameEngine
-using SleepingQueens.Shared.Data.Repositories; // IGameRepository, ICardRepository
+using SleepingQueens.Server.Data.Repositories; // IGameRepository, ICardRepository
 using SleepingQueens.Shared.Models.DTOs;       // DTOs
 using SleepingQueens.Shared.Models.Game;       // Domain models
-using SleepingQueens.Shared.Mapping;
+using SleepingQueens.Server.Mapping;
 using SleepingQueens.Shared.Models.Game.Enums;           // GameStateMapper
 
-namespace SleepingQueens.GameEngine;
+namespace SleepingQueens.Server.GameEngine;
 
-public class SleepingQueensGameEngine : IGameEngine
+public class SleepingQueensGameEngine(
+    IGameRepository gameRepository,
+    ICardRepository cardRepository,
+    ILogger<SleepingQueensGameEngine> logger) : IGameEngine
 {
-    private readonly IGameRepository _gameRepository;
-    private readonly ICardRepository _cardRepository;
-    private readonly ILogger<SleepingQueensGameEngine> _logger;
-
-    public SleepingQueensGameEngine(
-        IGameRepository gameRepository,
-        ICardRepository cardRepository,
-        ILogger<SleepingQueensGameEngine> logger)
-    {
-        _gameRepository = gameRepository;
-        _cardRepository = cardRepository;
-        _logger = logger;
-    }
+    private readonly IGameRepository _gameRepository = gameRepository;
+    private readonly ICardRepository _cardRepository = cardRepository;
+    private readonly ILogger<SleepingQueensGameEngine> _logger = logger;
 
     // ========== GAME LIFECYCLE ==========
 
@@ -53,10 +44,7 @@ public class SleepingQueensGameEngine : IGameEngine
 
     public async Task<Game> StartGameAsync(Guid gameId)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId);
-        if (game == null)
-            throw new ArgumentException($"Game {gameId} not found");
-
+        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
         if (game.Players.Count < game.Settings.MinPlayers)
             throw new InvalidOperationException($"Need at least {game.Settings.MinPlayers} players to start");
 
@@ -77,10 +65,7 @@ public class SleepingQueensGameEngine : IGameEngine
 
     public async Task<Game> EndGameAsync(Guid gameId, Guid? winnerId = null)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId);
-        if (game == null)
-            throw new ArgumentException($"Game {gameId} not found");
-
+        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
         game.Status = GameStatus.Completed;
         game.Phase = GamePhase.Ended;
         game.EndedAt = DateTime.UtcNow;
@@ -94,10 +79,7 @@ public class SleepingQueensGameEngine : IGameEngine
 
     public async Task<Game> AbandonGameAsync(Guid gameId)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId);
-        if (game == null)
-            throw new ArgumentException($"Game {gameId} not found");
-
+        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
         game.Status = GameStatus.Abandoned;
         game.Phase = GamePhase.Ended;
         game.EndedAt = DateTime.UtcNow;
@@ -648,7 +630,7 @@ public class SleepingQueensGameEngine : IGameEngine
 
         // Get a random queen from target player
         var queens = targetPlayer.Queens.ToList();
-        if (!queens.Any())
+        if (queens.Count == 0)
             return new GameActionResult(false, "Target player has no queens");
 
         var random = new Random();
@@ -794,7 +776,7 @@ public class SleepingQueensGameEngine : IGameEngine
 
     // ========== VALIDATION METHODS ==========
 
-    private bool CanPlayKing(Card card, GameState state, Player player, out string? errorMessage)
+    private static bool CanPlayKing(Card card, GameState state, Player player, out string? errorMessage)
     {
         errorMessage = null;
 
@@ -804,7 +786,7 @@ public class SleepingQueensGameEngine : IGameEngine
             return false;
         }
 
-        if (!state.SleepingQueens.Any())
+        if (state.SleepingQueens.Count == 0)
         {
             errorMessage = "No sleeping queens to wake";
             return false;

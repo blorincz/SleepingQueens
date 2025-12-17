@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using SleepingQueens.Shared.Data.Repositories;
-using SleepingQueens.Shared.GameEngine;
+using SleepingQueens.Server.Data.Repositories;
+using SleepingQueens.Server.GameEngine;
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 
@@ -8,21 +8,14 @@ namespace SleepingQueens.Server.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class GamesController : ControllerBase
+public class GamesController(
+    IGameRepository gameRepository,
+    IGameEngine gameEngine,
+    ILogger<GamesController> logger) : ControllerBase
 {
-    private readonly IGameRepository _gameRepository;
-    private readonly IGameEngine _gameEngine;
-    private readonly ILogger<GamesController> _logger;
-
-    public GamesController(
-        IGameRepository gameRepository,
-        IGameEngine gameEngine,
-        ILogger<GamesController> logger)
-    {
-        _gameRepository = gameRepository;
-        _gameEngine = gameEngine;
-        _logger = logger;
-    }
+    private readonly IGameRepository _gameRepository = gameRepository;
+    private readonly IGameEngine _gameEngine = gameEngine;
+    private readonly ILogger<GamesController> _logger = logger;
 
     [HttpGet("active")]
     public async Task<ActionResult<IEnumerable<GameInfoDto>>> GetActiveGames()

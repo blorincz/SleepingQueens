@@ -1,7 +1,7 @@
 ﻿using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 
-namespace SleepingQueens.Shared.GameEngine;
+namespace SleepingQueens.Server.GameEngine;
 
 public static class GameRules
 {

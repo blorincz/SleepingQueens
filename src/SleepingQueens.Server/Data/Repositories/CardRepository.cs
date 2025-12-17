@@ -1,5 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using SleepingQueens.Shared.Data.Repositories;  // Interface from Shared
+using SleepingQueens.Server.Data.Repositories;  // Interface from Shared
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 

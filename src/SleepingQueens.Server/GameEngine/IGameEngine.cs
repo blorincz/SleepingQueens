@@ -1,7 +1,7 @@
 ﻿using SleepingQueens.Shared.Models.DTOs;
 using SleepingQueens.Shared.Models.Game;
 
-namespace SleepingQueens.Shared.GameEngine;
+namespace SleepingQueens.Server.GameEngine;
 
 public interface IGameEngine
 {

@@ -1,7 +1,7 @@
 ﻿using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 
-namespace SleepingQueens.Shared.Data.Repositories;
+namespace SleepingQueens.Server.Data.Repositories;
 
 public interface ICardRepository
 {

@@ -1,6 +1,6 @@
 ﻿using SleepingQueens.Shared.Models.Game;
 
-namespace SleepingQueens.Shared.GameEngine;
+namespace SleepingQueens.Server.GameEngine;
 
 public class Deck
 {

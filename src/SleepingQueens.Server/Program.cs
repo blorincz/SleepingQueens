@@ -5,7 +5,6 @@ using SleepingQueens.Server.Data.UnitOfWork;
 using SleepingQueens.Server.Hubs;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using SleepingQueens.Shared.Data.Repositories;  // Interfaces
 
 var builder = WebApplication.CreateBuilder(args);
 

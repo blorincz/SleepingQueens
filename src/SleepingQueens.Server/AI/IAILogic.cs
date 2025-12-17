@@ -1,4 +1,4 @@
-﻿namespace SleepingQueens.GameEngine.AI;
+﻿namespace SleepingQueens.Server.AI;
 
 public interface IAILogic
 {

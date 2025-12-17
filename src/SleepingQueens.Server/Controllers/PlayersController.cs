@@ -1,22 +1,15 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SleepingQueens.Server.Data.Repositories;
-using SleepingQueens.Shared.Data.Repositories;
 using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Server.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class PlayersController : ControllerBase
+public class PlayersController(IGameRepository gameRepository, ILogger<PlayersController> logger) : ControllerBase
 {
-    private readonly IGameRepository _gameRepository;
-    private readonly ILogger<PlayersController> _logger;
-
-    public PlayersController(IGameRepository gameRepository, ILogger<PlayersController> logger)
-    {
-        _gameRepository = gameRepository;
-        _logger = logger;
-    }
+    private readonly IGameRepository _gameRepository = gameRepository;
+    private readonly ILogger<PlayersController> _logger = logger;
 
     [HttpGet("{id}")]
     public async Task<ActionResult<PlayerDto>> GetPlayer(Guid id)

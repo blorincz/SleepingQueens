@@ -1,5 +1,4 @@
-﻿using SleepingQueens.Shared.GameEngine;
-using SleepingQueens.Shared.Models.Game;
+﻿using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Shared.Models.DTOs;
@@ -84,7 +83,7 @@ public class GameStartedEvent
 {
     public Guid GameId { get; set; }
     public DateTime StartedAt { get; set; }
-    public List<PlayerInfo> Players { get; set; } = new();
+    public List<PlayerInfo> Players { get; set; } = [];
 }
 
 public class PlayerInfo

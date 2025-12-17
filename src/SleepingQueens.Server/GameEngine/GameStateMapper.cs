@@ -3,7 +3,7 @@ using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 using System.Text.Json;
 
-namespace SleepingQueens.Shared.Mapping;
+namespace SleepingQueens.Server.Mapping;
 
 public static class GameStateMapper
 {

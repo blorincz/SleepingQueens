@@ -1,8 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using SleepingQueens.Shared.Data.Repositories;  // Interfaces now from Shared
+using SleepingQueens.Server.Data.Repositories;  // Interfaces now from Shared
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.DTOs;
-using SleepingQueens.Shared.Mapping;
+using SleepingQueens.Server.Mapping;
 using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Server.Data.Repositories;

@@ -17,7 +17,6 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\SleepingQueens.Shared\SleepingQueens.Shared.csproj" />
-		<ProjectReference Include="..\SleepingQueens.GameEngine\SleepingQueens.GameEngine.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

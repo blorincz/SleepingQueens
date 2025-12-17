@@ -50,8 +50,8 @@ public class PlayerDto
     public PlayerType Type { get; set; }
     public int Score { get; set; }
     public bool IsCurrentTurn { get; set; }
-    public List<CardDto> Hand { get; set; } = new();
-    public List<QueenDto> Queens { get; set; } = new();
+    public List<CardDto> Hand { get; set; } = [];
+    public List<QueenDto> Queens { get; set; } =[];
 }
 
 public class GameEventDto
