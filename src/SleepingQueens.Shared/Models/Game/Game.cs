@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using SleepingQueens.Shared.Models.Game.Enums;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
 
 namespace SleepingQueens.Shared.Models.Game;

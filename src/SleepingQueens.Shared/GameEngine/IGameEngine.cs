@@ -1,6 +1,7 @@
-﻿using SleepingQueens.Shared.Models.Game;
+﻿using SleepingQueens.Shared.Models.DTOs;
+using SleepingQueens.Shared.Models.Game;
 
-namespace SleepingQueens.GameEngine;
+namespace SleepingQueens.Shared.GameEngine;
 
 public interface IGameEngine
 {
@@ -24,7 +25,7 @@ public interface IGameEngine
     Task<GameActionResult> DiscardCardsAsync(Guid gameId, Guid playerId, IEnumerable<Guid> cardIds);
 
     // Game state
-    Task<GameState> GetGameStateAsync(Guid gameId);
+    Task<GameStateDto> GetGameStateDtoAsync(Guid gameId);
     Task<Player> GetCurrentPlayerAsync(Guid gameId);
     Task<bool> IsValidMoveAsync(Guid gameId, Guid playerId, Guid cardId,
         Guid? targetPlayerId = null, Guid? targetQueenId = null);
@@ -43,27 +44,5 @@ public interface IGameEngine
 public record GameActionResult(
     bool Success,
     string Message,
-    GameState? UpdatedState = null,
-    GameEvent? GameEvent = null);
-
-public enum GameEventType
-{
-    CardPlayed,
-    QueenWoken,
-    QueenStolen,
-    DragonBlocked,
-    PotionUsed,
-    TurnEnded,
-    GameEnded,
-    PlayerJoined,
-    PlayerLeft
-}
-
-public record GameEvent(
-    GameEventType Type,
-    string Description,
-    DateTime Timestamp = default,
-    object? Data = null)
-{
-    public DateTime Timestamp { get; } = Timestamp == default ? DateTime.UtcNow : Timestamp;
-}
+    GameStateDto? UpdatedState = null,
+    GameEventDto? GameEvent = null);

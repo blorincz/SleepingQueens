@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SleepingQueens.Server.Data.Converters;
 using SleepingQueens.Shared.Models.Game;
+using SleepingQueens.Shared.Models.Game.Enums;
 using System.Text.Json;
 
 namespace SleepingQueens.Server.Data;
@@ -48,7 +49,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         modelBuilder.Entity<Game>()
             .Property(g => g.Phase)
-            .HasConversion<string>()
+            .HasConversion(new GamePhaseConverter())
             .HasMaxLength(20);
 
         modelBuilder.Entity<Game>()
@@ -71,7 +72,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         // GameCard converters
         modelBuilder.Entity<GameCard>()
             .Property(gc => gc.Location)
-            .HasConversion<string>()
+            .HasConversion(new CardLocationConverter())
             .HasMaxLength(20);
 
         // Move converters

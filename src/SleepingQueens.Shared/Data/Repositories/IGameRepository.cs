@@ -1,10 +1,13 @@
-﻿using SleepingQueens.Shared.Models.Game;
+﻿using SleepingQueens.Shared.Models.DTOs;
+using SleepingQueens.Shared.Models.Game;
+using SleepingQueens.Shared.Models.Game.Enums;
 
-namespace SleepingQueens.Server.Data.Repositories;
+namespace SleepingQueens.Shared.Data.Repositories;
 
-public interface IGameRepository : IRepository<Game>
+public interface IGameRepository
 {
-    // Game-specific operations
+    // Game operations
+    Task<Game?> GetByIdAsync(Guid id);
     Task<Game?> GetByCodeAsync(string code);
     Task<IEnumerable<Game>> GetActiveGamesAsync();
     Task<IEnumerable<Game>> GetGamesByStatusAsync(GameStatus status);
@@ -32,6 +35,7 @@ public interface IGameRepository : IRepository<Game>
     // Queen operations
     Task<IEnumerable<Queen>> GetSleepingQueensAsync(Guid gameId);
     Task<IEnumerable<Queen>> GetPlayerQueensAsync(Guid playerId);
+    Task<IEnumerable<Queen>> GetQueensForGameAsync(Guid gameId);
     Task<Queen?> GetQueenByIdAsync(Guid queenId);
     Task TransferQueenAsync(Guid queenId, Guid toPlayerId);
     Task PutQueenToSleepAsync(Guid queenId);
@@ -39,14 +43,15 @@ public interface IGameRepository : IRepository<Game>
 
     // Move operations
     Task<Move> RecordMoveAsync(Move move);
-    Task<IEnumerable<Move>> GetGameMovesAsync(Guid gameId, int count = 50);
+    Task<List<Move>> GetGameMovesAsync(Guid gameId, int limit = 50);
     Task<int> GetNextTurnNumberAsync(Guid gameId);
 
     // Complex operations
-    Task UpdateGameSettingsAsync(Guid gameId, GameSettings settings);
-    Task<GameState> GetFullGameStateAsync(Guid gameId);
+    Task<GameStateDto> GetGameStateDtoAsync(Guid gameId);
     Task InitializeNewGameAsync(Game game, Player firstPlayer);
     Task ShuffleDeckAsync(Guid gameId);
     Task<bool> CheckForWinnerAsync(Guid gameId);
     Task EndGameAsync(Guid gameId, Guid? winnerId = null);
+    Task UpdateGameSettingsAsync(Guid gameId, GameSettings settings);
+    Task UpdateAsync(Game game);
 }

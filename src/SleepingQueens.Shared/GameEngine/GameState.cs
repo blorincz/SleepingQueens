@@ -1,6 +1,7 @@
 ﻿using SleepingQueens.Shared.Models.Game;
+using SleepingQueens.Shared.Models.Game.Enums;
 
-namespace SleepingQueens.GameEngine;
+namespace SleepingQueens.Shared.GameEngine;
 
 public class GameState
 {

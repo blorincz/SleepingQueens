@@ -1,10 +1,20 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using SleepingQueens.Shared.Data.Repositories;  // Interfaces now from Shared
 using SleepingQueens.Shared.Models.Game;
+using SleepingQueens.Shared.Models.DTOs;
+using SleepingQueens.Shared.Mapping;
+using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Server.Data.Repositories;
 
-public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>(context), IGameRepository
+public class GameRepository : BaseRepository<Game>, IGameRepository
 {
+    public GameRepository(ApplicationDbContext context) : base(context)
+    {
+    }
+
+    // ========== GAME OPERATIONS ==========
+
     public async Task<Game?> GetByCodeAsync(string code)
     {
         return await _context.Games
@@ -49,7 +59,8 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
         for (int attempt = 0; attempt < 10; attempt++)
         {
-            var code = new string([.. Enumerable.Repeat(chars, 6).Select(s => s[random.Next(s.Length)])]);
+            var code = new string(Enumerable.Repeat(chars, 6)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
 
             if (!await CodeExistsAsync(code))
                 return code;
@@ -58,7 +69,8 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
         throw new InvalidOperationException("Could not generate unique game code");
     }
 
-    // Player operations
+    // ========== PLAYER OPERATIONS ==========
+
     public async Task<Player?> GetPlayerAsync(Guid playerId)
     {
         return await _context.Players
@@ -70,7 +82,10 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
     public async Task<Player> AddPlayerAsync(Guid gameId, Player player)
     {
-        var game = await _context.Games.FindAsync(gameId) ?? throw new ArgumentException($"Game with ID {gameId} not found");
+        var game = await _context.Games.FindAsync(gameId);
+        if (game == null)
+            throw new ArgumentException($"Game with ID {gameId} not found");
+
         if (game.Players.Count >= game.MaxPlayers)
             throw new InvalidOperationException("Game is full");
 
@@ -132,7 +147,8 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
             .ToListAsync();
     }
 
-    // Card operations
+    // ========== CARD OPERATIONS ==========
+
     public async Task<IEnumerable<Card>> GetPlayerHandAsync(Guid playerId)
     {
         return await _context.PlayerCards
@@ -253,7 +269,8 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
             .ToListAsync();
     }
 
-    // Queen operations
+    // ========== QUEEN OPERATIONS ==========
+
     public async Task<IEnumerable<Queen>> GetSleepingQueensAsync(Guid gameId)
     {
         return await _context.Queens
@@ -268,6 +285,13 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
             .ToListAsync();
     }
 
+    public async Task<IEnumerable<Queen>> GetQueensForGameAsync(Guid gameId)
+    {
+        return await _context.Queens
+            .Where(q => q.GameId == gameId)
+            .ToListAsync();
+    }
+
     public async Task<Queen?> GetQueenByIdAsync(Guid queenId)
     {
         return await _context.Queens
@@ -277,7 +301,10 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
     public async Task TransferQueenAsync(Guid queenId, Guid toPlayerId)
     {
-        var queen = await GetQueenByIdAsync(queenId) ?? throw new ArgumentException($"Queen with ID {queenId} not found");
+        var queen = await GetQueenByIdAsync(queenId);
+        if (queen == null)
+            throw new ArgumentException($"Queen with ID {queenId} not found");
+
         queen.PlayerId = toPlayerId;
         queen.IsAwake = true;
 
@@ -286,7 +313,10 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
     public async Task PutQueenToSleepAsync(Guid queenId)
     {
-        var queen = await GetQueenByIdAsync(queenId) ?? throw new ArgumentException($"Queen with ID {queenId} not found");
+        var queen = await GetQueenByIdAsync(queenId);
+        if (queen == null)
+            throw new ArgumentException($"Queen with ID {queenId} not found");
+
         queen.PlayerId = null;
         queen.IsAwake = false;
 
@@ -295,14 +325,18 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
     public async Task WakeQueenAsync(Guid queenId, Guid playerId)
     {
-        var queen = await GetQueenByIdAsync(queenId) ?? throw new ArgumentException($"Queen with ID {queenId} not found");
+        var queen = await GetQueenByIdAsync(queenId);
+        if (queen == null)
+            throw new ArgumentException($"Queen with ID {queenId} not found");
+
         queen.PlayerId = playerId;
         queen.IsAwake = true;
 
         await _context.SaveChangesAsync();
     }
 
-    // Move operations
+    // ========== MOVE OPERATIONS ==========
+
     public async Task<Move> RecordMoveAsync(Move move)
     {
         _context.Moves.Add(move);
@@ -310,14 +344,13 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
         return move;
     }
 
-    public async Task<IEnumerable<Move>> GetGameMovesAsync(Guid gameId, int count = 50)
+    public async Task<IEnumerable<Move>> GetGameMovesAsync(Guid gameId, int limit = 50)
     {
         return await _context.Moves
             .Include(m => m.Player)
             .Where(m => m.GameId == gameId)
-            .OrderByDescending(m => m.TurnNumber)
-            .ThenByDescending(m => m.Timestamp)
-            .Take(count)
+            .OrderByDescending(m => m.Timestamp)
+            .Take(limit)
             .ToListAsync();
     }
 
@@ -330,8 +363,9 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
         return lastTurn + 1;
     }
 
-    // Complex operations
-    public async Task<GameState> GetFullGameStateAsync(Guid gameId)
+    // ========== GAME STATE DTO OPERATIONS ==========
+
+    public async Task<GameStateDto> GetGameStateDtoAsync(Guid gameId)
     {
         var game = await _context.Games
             .Include(g => g.Players)
@@ -343,42 +377,32 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
             .Include(g => g.DeckCards)
                 .ThenInclude(gc => gc.Card)
             .Include(g => g.Moves)
-            .FirstOrDefaultAsync(g => g.Id == gameId) ?? throw new ArgumentException($"Game with ID {gameId} not found");
-        return new GameState
-        {
-            Game = game,
-            Players = [.. game.Players],
-            Queens = [.. game.Queens],
-            Deck = [.. game.DeckCards.Where(gc => gc.Location == CardLocation.Deck)],
-            Discard = [.. game.DeckCards.Where(gc => gc.Location == CardLocation.Discard)],
-            Moves = [.. game.Moves.OrderByDescending(m => m.Timestamp).Take(10)]
-        };
+                .ThenInclude(m => m.Player)
+            .FirstOrDefaultAsync(g => g.Id == gameId)
+            ?? throw new ArgumentException($"Game with ID {gameId} not found");
+
+        // Get recent moves
+        var recentMoves = game.Moves
+            .OrderByDescending(m => m.Timestamp)
+            .Take(10)
+            .ToList();
+
+        // Use GameStateMapper with entity moves (Option A)
+        return GameStateMapper.ToDto(
+            game,
+            game.Players.ToList(),
+            game.Queens.ToList(),
+            game.DeckCards.ToList(),
+            recentMoves
+        );
     }
 
-    // Add method to update settings
-    public async Task UpdateGameSettingsAsync(Guid gameId, GameSettings settings)
-    {
-        var game = await GetByIdAsync(gameId) ?? throw new ArgumentException($"Game with ID {gameId} not found");
-
-        // Validate settings
-        if (!settings.Validate())
-            throw new ArgumentException("Invalid game settings");
-
-        game.Settings = settings;
-        await _context.SaveChangesAsync();
-    }
-
-    // Update InitializeNewGameAsync to use settings
     public async Task InitializeNewGameAsync(Game game, Player firstPlayer)
     {
         using var transaction = await _context.Database.BeginTransactionAsync();
 
         try
         {
-            // Validate settings
-            if (!game.Settings.Validate())
-                throw new ArgumentException("Invalid game settings");
-
             // Add game
             _context.Games.Add(game);
             await _context.SaveChangesAsync();
@@ -389,26 +413,10 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
             _context.Players.Add(firstPlayer);
             await _context.SaveChangesAsync();
 
-            // Add AI players if configured
-            if (game.Settings.AllowAI && game.Settings.AICount > 0)
-            {
-                for (int i = 0; i < game.Settings.AICount; i++)
-                {
-                    var aiPlayer = new Player
-                    {
-                        GameId = game.Id,
-                        Name = $"AI Player {i + 1}",
-                        Type = PlayerType.AI_Medium, // Default to medium
-                        JoinedAt = DateTime.UtcNow
-                    };
-
-                    _context.Players.Add(aiPlayer);
-                }
-                await _context.SaveChangesAsync();
-            }
-
-            // Get cards based on settings
-            var cards = await GetCardsForSettingsAsync(game.Settings);
+            // Get all standard cards (non-queens)
+            var cards = await _context.Cards
+                .Where(c => c.Type != CardType.Queen)
+                .ToListAsync();
 
             // Add cards to deck
             var random = new Random();
@@ -461,17 +469,13 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
                 _context.Queens.Add(queen);
             }
 
-            // Draw initial hand for all players
-            var players = await GetPlayersInGameAsync(game.Id);
-            foreach (var player in players)
+            // Draw initial hand for first player (5 cards)
+            for (int i = 0; i < 5; i++)
             {
-                for (int i = 0; i < game.Settings.StartingHandSize; i++)
+                var gameCard = await DrawCardFromDeckAsync(game.Id);
+                if (gameCard != null)
                 {
-                    var gameCard = await DrawCardFromDeckAsync(game.Id);
-                    if (gameCard != null)
-                    {
-                        await AddCardToPlayerHandAsync(player.Id, gameCard.CardId);
-                    }
+                    await AddCardToPlayerHandAsync(firstPlayer.Id, gameCard.CardId);
                 }
             }
 
@@ -481,7 +485,7 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
                 GameId = game.Id,
                 PlayerId = firstPlayer.Id,
                 Type = MoveType.DrawCard,
-                Description = $"Game started with {players.Count()} players",
+                Description = $"Initial hand drawn for {firstPlayer.Name}",
                 TurnNumber = 1,
                 Timestamp = DateTime.UtcNow
             };
@@ -494,49 +498,6 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
             await transaction.RollbackAsync();
             throw;
         }
-    }
-
-    private async Task<List<Card>> GetCardsForSettingsAsync(GameSettings settings)
-    {
-        var query = _context.Cards.AsQueryable();
-
-        // Filter based on settings
-        if (!settings.EnableSpecialCards)
-        {
-            // Only include number cards
-            query = query.Where(c => c.Type == CardType.Number);
-        }
-        else
-        {
-            // Apply custom counts from settings
-            // This is simplified - you'd need to implement card selection based on counts
-            var allCards = await query.ToListAsync();
-            var selectedCards = new List<Card>();
-
-            // Add number cards
-            var numberCards = allCards.Where(c => c.Type == CardType.Number).ToList();
-            selectedCards.AddRange(numberCards.Take(settings.NumberCardCountPerValue * 10));
-
-            // Add special cards based on settings
-            if (settings.KingCardCount > 0)
-                selectedCards.AddRange(allCards.Where(c => c.Type == CardType.King).Take(settings.KingCardCount));
-
-            if (settings.KnightCardCount > 0 && settings.AllowQueenStealing)
-                selectedCards.AddRange(allCards.Where(c => c.Type == CardType.Knight).Take(settings.KnightCardCount));
-
-            if (settings.DragonCardCount > 0 && settings.AllowDragonProtection)
-                selectedCards.AddRange(allCards.Where(c => c.Type == CardType.Dragon).Take(settings.DragonCardCount));
-
-            if (settings.SleepingPotionCount > 0 && settings.AllowSleepingPotions)
-                selectedCards.AddRange(allCards.Where(c => c.Type == CardType.SleepingPotion).Take(settings.SleepingPotionCount));
-
-            if (settings.JesterCardCount > 0 && settings.AllowJester)
-                selectedCards.AddRange(allCards.Where(c => c.Type == CardType.Jester).Take(settings.JesterCardCount));
-
-            return selectedCards;
-        }
-
-        return await query.ToListAsync();
     }
 
     public async Task ShuffleDeckAsync(Guid gameId)
@@ -577,15 +538,19 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
         await _context.SaveChangesAsync();
     }
-}
 
-// Helper class for full game state
-public class GameState
-{
-    public required Game Game { get; set; }
-    public required List<Player> Players { get; set; }
-    public required List<Queen> Queens { get; set; }
-    public required List<GameCard> Deck { get; set; }
-    public required List<GameCard> Discard { get; set; }
-    public required List<Move> Moves { get; set; }
+    public async Task UpdateGameSettingsAsync(Guid gameId, GameSettings settings)
+    {
+        var game = await GetByIdAsync(gameId);
+        if (game == null)
+            throw new ArgumentException($"Game with ID {gameId} not found");
+
+        game.Settings = settings;
+        await _context.SaveChangesAsync();
+    }
+
+    Task<List<Move>> IGameRepository.GetGameMovesAsync(Guid gameId, int limit)
+    {
+        throw new NotImplementedException();
+    }
 }

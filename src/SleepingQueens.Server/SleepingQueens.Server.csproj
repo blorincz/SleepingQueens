@@ -10,12 +10,17 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.1" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.1">
 			<PrivateAssets>all</PrivateAssets>
-			<IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.0.1" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\SleepingQueens.Shared\SleepingQueens.Shared.csproj" />
+		<ProjectReference Include="..\SleepingQueens.GameEngine\SleepingQueens.GameEngine.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Mapping\" />
 	</ItemGroup>
 </Project>

@@ -1,4 +1,6 @@
-﻿namespace SleepingQueens.Shared.Models.Game;
+﻿using SleepingQueens.Shared.Models.Game.Enums;
+
+namespace SleepingQueens.Shared.Models.Game;
 
 public class GameCard
 {

@@ -3,11 +3,11 @@ using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Server.Data.Converters;
 
-public class CardTypeConverter : ValueConverter<CardType, string>
+public class CardLocationConverter : ValueConverter<CardLocation, string>
 {
-    public CardTypeConverter() : base(
+    public CardLocationConverter() : base(
         v => v.ToString(),
-        v => Enum.Parse<CardType>(v))
+        v => Enum.Parse<CardLocation>(v))
     {
     }
 }

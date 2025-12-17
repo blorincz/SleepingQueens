@@ -1,4 +1,6 @@
-﻿namespace SleepingQueens.Shared.Models.Game;
+﻿using SleepingQueens.Shared.Models.Game.Enums;
+
+namespace SleepingQueens.Shared.Models.Game;
 
 public class Card
 {
@@ -13,15 +15,4 @@ public class Card
     // Navigation properties
     public virtual ICollection<PlayerCard> PlayerCards { get; set; } = new List<PlayerCard>();
     public virtual ICollection<GameCard> GameCards { get; set; } = new List<GameCard>();
-}
-
-public enum CardType
-{
-    King = 1,
-    Queen = 2,
-    Knight = 3,
-    Dragon = 4,
-    SleepingPotion = 5,
-    Jester = 6,
-    Number = 7
 }

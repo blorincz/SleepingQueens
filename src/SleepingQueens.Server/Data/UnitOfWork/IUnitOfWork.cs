@@ -1,4 +1,4 @@
-﻿using SleepingQueens.Server.Data.Repositories;
+﻿using SleepingQueens.Shared.Data.Repositories;
 
 namespace SleepingQueens.Server.Data.UnitOfWork;
 

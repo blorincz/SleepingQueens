@@ -1,19 +1,29 @@
-﻿using Microsoft.Extensions.Logging;
-using SleepingQueens.GameEngine.AI;
-using SleepingQueens.Server.Data.Repositories;
-using SleepingQueens.Shared.Models.Game;
-using System.Text.Json;
+﻿using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using SleepingQueens.Shared.GameEngine;        // IGameEngine
+using SleepingQueens.Shared.Data.Repositories; // IGameRepository, ICardRepository
+using SleepingQueens.Shared.Models.DTOs;       // DTOs
+using SleepingQueens.Shared.Models.Game;       // Domain models
+using SleepingQueens.Shared.Mapping;
+using SleepingQueens.Shared.Models.Game.Enums;           // GameStateMapper
 
 namespace SleepingQueens.GameEngine;
 
-public class SleepingQueensGameEngine(
-    IGameRepository gameRepository,
-    ICardRepository cardRepository,
-    ILogger<SleepingQueensGameEngine> logger) : IGameEngine
+public class SleepingQueensGameEngine : IGameEngine
 {
-    private readonly IGameRepository _gameRepository = gameRepository;
-    private readonly ICardRepository _cardRepository = cardRepository;
-    private readonly ILogger<SleepingQueensGameEngine> _logger = logger;
+    private readonly IGameRepository _gameRepository;
+    private readonly ICardRepository _cardRepository;
+    private readonly ILogger<SleepingQueensGameEngine> _logger;
+
+    public SleepingQueensGameEngine(
+        IGameRepository gameRepository,
+        ICardRepository cardRepository,
+        ILogger<SleepingQueensGameEngine> logger)
+    {
+        _gameRepository = gameRepository;
+        _cardRepository = cardRepository;
+        _logger = logger;
+    }
 
     // ========== GAME LIFECYCLE ==========
 
@@ -43,7 +53,10 @@ public class SleepingQueensGameEngine(
 
     public async Task<Game> StartGameAsync(Guid gameId)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
+        var game = await _gameRepository.GetByIdAsync(gameId);
+        if (game == null)
+            throw new ArgumentException($"Game {gameId} not found");
+
         if (game.Players.Count < game.Settings.MinPlayers)
             throw new InvalidOperationException($"Need at least {game.Settings.MinPlayers} players to start");
 
@@ -64,22 +77,13 @@ public class SleepingQueensGameEngine(
 
     public async Task<Game> EndGameAsync(Guid gameId, Guid? winnerId = null)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
+        var game = await _gameRepository.GetByIdAsync(gameId);
+        if (game == null)
+            throw new ArgumentException($"Game {gameId} not found");
+
         game.Status = GameStatus.Completed;
         game.Phase = GamePhase.Ended;
         game.EndedAt = DateTime.UtcNow;
-
-        // Record winner if provided
-        if (winnerId.HasValue)
-        {
-            var winner = game.Players.FirstOrDefault(p => p.Id == winnerId.Value);
-            if (winner != null)
-            {
-                // Update winner stats if needed
-                _logger.LogInformation("Game {GameId} ended. Winner: {WinnerName}",
-                    gameId, winner.Name);
-            }
-        }
 
         await _gameRepository.UpdateAsync(game);
 
@@ -90,7 +94,10 @@ public class SleepingQueensGameEngine(
 
     public async Task<Game> AbandonGameAsync(Guid gameId)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
+        var game = await _gameRepository.GetByIdAsync(gameId);
+        if (game == null)
+            throw new ArgumentException($"Game {gameId} not found");
+
         game.Status = GameStatus.Abandoned;
         game.Phase = GamePhase.Ended;
         game.EndedAt = DateTime.UtcNow;
@@ -106,7 +113,10 @@ public class SleepingQueensGameEngine(
 
     public async Task<Player> AddPlayerAsync(Guid gameId, Player player)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
+        var game = await _gameRepository.GetByIdAsync(gameId);
+        if (game == null)
+            throw new ArgumentException($"Game {gameId} not found");
+
         if (game.IsFull())
             throw new InvalidOperationException("Game is full");
 
@@ -131,7 +141,7 @@ public class SleepingQueensGameEngine(
                 AILevel.Easy => PlayerType.AI_Easy,
                 AILevel.Medium => PlayerType.AI_Medium,
                 AILevel.Hard => PlayerType.AI_Hard,
-                AILevel.Expert => PlayerType.AI_Hard, // Map Expert to Hard for now
+                AILevel.Expert => PlayerType.AI_Hard,
                 _ => PlayerType.AI_Medium
             }
         };
@@ -149,9 +159,12 @@ public class SleepingQueensGameEngine(
 
     public async Task UpdatePlayerScoreAsync(Guid playerId, int score)
     {
-        var player = await _gameRepository.GetPlayerAsync(playerId) ?? throw new ArgumentException($"Player {playerId} not found");
+        var player = await _gameRepository.GetPlayerAsync(playerId);
+        if (player == null)
+            throw new ArgumentException($"Player {playerId} not found");
+
         player.Score = score;
-        await _gameRepository.UpdateAsync(player.Game); // This will trigger save
+        await _gameRepository.UpdateAsync(player.Game);
 
         _logger.LogDebug("Player {PlayerId} score updated to {Score}",
             playerId, score);
@@ -180,16 +193,7 @@ public class SleepingQueensGameEngine(
                 return new GameActionResult(false, "Invalid move");
 
             // Handle different card types
-            GameActionResult result = card.Type switch
-            {
-                CardType.King => await HandleKingCardAsync(state, player, card, targetQueenId),
-                CardType.Knight => await HandleKnightCardAsync(state, player, card, targetPlayerId!.Value),
-                CardType.Dragon => await HandleDragonCardAsync(state, player, card, targetPlayerId),
-                CardType.SleepingPotion => await HandlePotionCardAsync(state, player, card, targetQueenId!.Value),
-                CardType.Jester => await HandleJesterCardAsync(state, player, card),
-                CardType.Number => await HandleNumberCardAsync(state, player, card),
-                _ => new GameActionResult(false, $"Unhandled card type: {card.Type}")
-            };
+            var result = await HandleCardInternalAsync(state, player, card, targetPlayerId, targetQueenId);
 
             if (result.Success)
             {
@@ -215,14 +219,23 @@ public class SleepingQueensGameEngine(
                 if (winner != null)
                 {
                     await EndGameAsync(gameId, winner.Id);
-                    result = result with
+
+                    // Update result with game end event
+                    var gameEndEvent = new GameEventDto
                     {
-                        GameEvent = new GameEvent(
-                            GameEventType.GameEnded,
-                            $"{winner.Name} wins the game with {winner.Score} points!",
-                            Data: winner)
+                        Type = GameEventType.GameEnded,
+                        Description = $"{winner.Name} wins the game with {winner.Score} points!",
+                        Timestamp = DateTime.UtcNow,
+                        Data = new { WinnerId = winner.Id, WinnerName = winner.Name }
                     };
+
+                    var gameStateDto = await GetGameStateDtoAsync(gameId);
+                    return new GameActionResult(true, result.Message, gameStateDto, gameEndEvent);
                 }
+
+                // Return successful result with DTO
+                var updatedStateDto = await GetGameStateDtoAsync(gameId);
+                return new GameActionResult(true, result.Message, updatedStateDto, result.GameEvent);
             }
 
             return result;
@@ -234,124 +247,168 @@ public class SleepingQueensGameEngine(
         }
     }
 
+    private async Task<GameActionResult> HandleCardInternalAsync(GameState state, Player player,
+        Card card, Guid? targetPlayerId, Guid? targetQueenId)
+    {
+        return card.Type switch
+        {
+            CardType.King => await HandleKingCardAsync(state, player, card, targetQueenId),
+            CardType.Knight => await HandleKnightCardAsync(state, player, card, targetPlayerId!.Value),
+            CardType.Dragon => await HandleDragonCardAsync(state, player, card, targetPlayerId),
+            CardType.SleepingPotion => await HandlePotionCardAsync(state, player, card, targetQueenId!.Value),
+            CardType.Jester => await HandleJesterCardAsync(state, player, card),
+            CardType.Number => await HandleNumberCardAsync(state, player, card),
+            _ => new GameActionResult(false, $"Unhandled card type: {card.Type}")
+        };
+    }
+
     public async Task<GameActionResult> DrawCardAsync(Guid gameId, Guid playerId)
     {
-        var state = await GetGameStateAsync(gameId);
-        var player = state.Players.FirstOrDefault(p => p.Id == playerId);
-
-        if (player == null)
-            return new GameActionResult(false, "Player not found");
-
-        if (state.CurrentPlayer?.Id != playerId)
-            return new GameActionResult(false, "Not your turn");
-
-        var drawnCard = await _gameRepository.DrawCardFromDeckAsync(gameId);
-        if (drawnCard == null)
-            return new GameActionResult(false, "Deck is empty");
-
-        await _gameRepository.AddCardToPlayerHandAsync(playerId, drawnCard.CardId);
-
-        // Record move
-        var move = new Move
+        try
         {
-            GameId = gameId,
-            PlayerId = playerId,
-            Type = MoveType.DrawCard,
-            Description = $"{player.Name} drew a card",
-            TurnNumber = await _gameRepository.GetNextTurnNumberAsync(gameId),
-            Timestamp = DateTime.UtcNow
-        };
+            var state = await GetGameStateAsync(gameId);
+            var player = state.Players.FirstOrDefault(p => p.Id == playerId);
 
-        await _gameRepository.RecordMoveAsync(move);
+            if (player == null)
+                return new GameActionResult(false, "Player not found");
 
-        var updatedState = await GetGameStateAsync(gameId);
+            if (state.CurrentPlayer?.Id != playerId)
+                return new GameActionResult(false, "Not your turn");
 
-        return new GameActionResult(
-            true,
-            "Card drawn",
-            updatedState,
-            new GameEvent(GameEventType.CardPlayed, $"{player.Name} drew a card"));
+            var drawnCard = await _gameRepository.DrawCardFromDeckAsync(gameId);
+            if (drawnCard == null)
+                return new GameActionResult(false, "Deck is empty");
+
+            await _gameRepository.AddCardToPlayerHandAsync(playerId, drawnCard.CardId);
+
+            // Record move
+            var move = new Move
+            {
+                GameId = gameId,
+                PlayerId = playerId,
+                Type = MoveType.DrawCard,
+                Description = $"{player.Name} drew a card",
+                TurnNumber = await _gameRepository.GetNextTurnNumberAsync(gameId),
+                Timestamp = DateTime.UtcNow
+            };
+
+            await _gameRepository.RecordMoveAsync(move);
+
+            var gameStateDto = await GetGameStateDtoAsync(gameId);
+            var gameEvent = new GameEventDto
+            {
+                Type = GameEventType.CardPlayed,
+                Description = $"{player.Name} drew a card",
+                Timestamp = DateTime.UtcNow
+            };
+
+            return new GameActionResult(true, "Card drawn", gameStateDto, gameEvent);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error drawing card in game {GameId}", gameId);
+            return new GameActionResult(false, $"Error: {ex.Message}");
+        }
     }
 
     public async Task<GameActionResult> EndTurnAsync(Guid gameId, Guid playerId)
     {
-        var state = await GetGameStateAsync(gameId);
-        var players = state.Players.OrderBy(p => p.JoinedAt).ToList();
-        var currentIndex = players.FindIndex(p => p.Id == playerId);
-
-        if (currentIndex == -1)
-            return new GameActionResult(false, "Player not found in game");
-
-        // Calculate next player index
-        int nextIndex = (currentIndex + 1) % players.Count;
-
-        // Update current player
-        await _gameRepository.UpdatePlayerTurnAsync(gameId, players[currentIndex].Id, false);
-        await _gameRepository.UpdatePlayerTurnAsync(gameId, players[nextIndex].Id, true);
-
-        // Record move
-        var move = new Move
+        try
         {
-            GameId = gameId,
-            PlayerId = playerId,
-            Type = MoveType.EndTurn,
-            Description = $"{players[currentIndex].Name} ended turn. {players[nextIndex].Name}'s turn.",
-            TurnNumber = await _gameRepository.GetNextTurnNumberAsync(gameId),
-            Timestamp = DateTime.UtcNow
-        };
+            var state = await GetGameStateAsync(gameId);
+            var players = state.Players.OrderBy(p => p.JoinedAt).ToList();
+            var currentIndex = players.FindIndex(p => p.Id == playerId);
 
-        await _gameRepository.RecordMoveAsync(move);
+            if (currentIndex == -1)
+                return new GameActionResult(false, "Player not found in game");
 
-        var updatedState = await GetGameStateAsync(gameId);
+            // Calculate next player index
+            int nextIndex = (currentIndex + 1) % players.Count;
 
-        return new GameActionResult(
-            true,
-            "Turn ended",
-            updatedState,
-            new GameEvent(
-                GameEventType.TurnEnded,
-                $"{players[nextIndex].Name}'s turn now",
-                Data: players[nextIndex]));
+            // Update current player
+            await _gameRepository.UpdatePlayerTurnAsync(gameId, players[currentIndex].Id, false);
+            await _gameRepository.UpdatePlayerTurnAsync(gameId, players[nextIndex].Id, true);
+
+            // Record move
+            var move = new Move
+            {
+                GameId = gameId,
+                PlayerId = playerId,
+                Type = MoveType.EndTurn,
+                Description = $"{players[currentIndex].Name} ended turn. {players[nextIndex].Name}'s turn.",
+                TurnNumber = await _gameRepository.GetNextTurnNumberAsync(gameId),
+                Timestamp = DateTime.UtcNow
+            };
+
+            await _gameRepository.RecordMoveAsync(move);
+
+            var gameStateDto = await GetGameStateDtoAsync(gameId);
+            var gameEvent = new GameEventDto
+            {
+                Type = GameEventType.TurnEnded,
+                Description = $"{players[nextIndex].Name}'s turn now",
+                Timestamp = DateTime.UtcNow,
+                Data = new { NextPlayerId = players[nextIndex].Id, NextPlayerName = players[nextIndex].Name }
+            };
+
+            return new GameActionResult(true, "Turn ended", gameStateDto, gameEvent);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error ending turn in game {GameId}", gameId);
+            return new GameActionResult(false, $"Error: {ex.Message}");
+        }
     }
 
     public async Task<GameActionResult> DiscardCardsAsync(Guid gameId, Guid playerId, IEnumerable<Guid> cardIds)
     {
-        var cards = cardIds.ToList();
-        if (cards.Count == 0)
-            return new GameActionResult(false, "No cards to discard");
-
-        foreach (var cardId in cards)
+        try
         {
-            await _gameRepository.RemoveCardFromPlayerHandAsync(playerId, cardId);
-            await _gameRepository.DiscardCardAsync(gameId, cardId);
+            var cards = cardIds.ToList();
+            if (cards.Count == 0)
+                return new GameActionResult(false, "No cards to discard");
+
+            foreach (var cardId in cards)
+            {
+                await _gameRepository.RemoveCardFromPlayerHandAsync(playerId, cardId);
+                await _gameRepository.DiscardCardAsync(gameId, cardId);
+            }
+
+            var move = new Move
+            {
+                GameId = gameId,
+                PlayerId = playerId,
+                Type = MoveType.Discard,
+                Description = $"Discarded {cards.Count} card(s)",
+                CardIds = JsonSerializer.Serialize(cards),
+                TurnNumber = await _gameRepository.GetNextTurnNumberAsync(gameId),
+                Timestamp = DateTime.UtcNow
+            };
+
+            await _gameRepository.RecordMoveAsync(move);
+
+            var gameStateDto = await GetGameStateDtoAsync(gameId);
+
+            return new GameActionResult(
+                true,
+                $"Discarded {cards.Count} card(s)",
+                gameStateDto);
         }
-
-        var move = new Move
+        catch (Exception ex)
         {
-            GameId = gameId,
-            PlayerId = playerId,
-            Type = MoveType.PlayCard,
-            Description = $"Discarded {cards.Count} card(s)",
-            CardIds = JsonSerializer.Serialize(cards),
-            TurnNumber = await _gameRepository.GetNextTurnNumberAsync(gameId),
-            Timestamp = DateTime.UtcNow
-        };
-
-        await _gameRepository.RecordMoveAsync(move);
-
-        var updatedState = await GetGameStateAsync(gameId);
-
-        return new GameActionResult(
-            true,
-            $"Discarded {cards.Count} card(s)",
-            updatedState);
+            _logger.LogError(ex, "Error discarding cards in game {GameId}", gameId);
+            return new GameActionResult(false, $"Error: {ex.Message}");
+        }
     }
 
     // ========== GAME STATE ==========
 
     public async Task<GameState> GetGameStateAsync(Guid gameId)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
+        var game = await _gameRepository.GetByIdAsync(gameId);
+        if (game == null)
+            throw new ArgumentException($"Game {gameId} not found");
+
         var players = await _gameRepository.GetPlayersInGameAsync(gameId);
         var sleepingQueens = await _gameRepository.GetSleepingQueensAsync(gameId);
         var deckCards = await _gameRepository.GetDeckCardsAsync(gameId);
@@ -367,15 +424,34 @@ public class SleepingQueensGameEngine(
         return new GameState
         {
             Game = game,
-            Players = [.. players],
-            SleepingQueens = [.. sleepingQueens],
+            Players = players.ToList(),
+            SleepingQueens = sleepingQueens.ToList(),
             AwakenedQueens = awakenedQueens,
             Deck = new Deck(deckCards.Select(gc => gc.Card)),
-            DiscardPile = [.. discardPile.Select(gc => gc.Card)],
-            RecentMoves = [.. recentMoves],
+            DiscardPile = discardPile.Select(gc => gc.Card).ToList(),
+            RecentMoves = recentMoves.ToList(),
             CurrentPlayer = players.FirstOrDefault(p => p.IsCurrentTurn),
             CurrentPhase = game.Phase
         };
+    }
+
+    public async Task<GameStateDto> GetGameStateDtoAsync(Guid gameId)
+    {
+        var game = await _gameRepository.GetByIdAsync(gameId);
+        if (game == null)
+            throw new ArgumentException($"Game {gameId} not found");
+
+        var players = await _gameRepository.GetPlayersInGameAsync(gameId);
+        var allQueens = await _gameRepository.GetQueensForGameAsync(gameId);
+        var deckCards = await _gameRepository.GetDeckCardsAsync(gameId);
+        var moves = await _gameRepository.GetGameMovesAsync(gameId, 10);
+
+        return GameStateMapper.ToDto(
+            game,
+            players.ToList(),
+            allQueens.ToList(),
+            deckCards.ToList(),
+            moves.ToList());  // Pass entity moves
     }
 
     public async Task<Player> GetCurrentPlayerAsync(Guid gameId)
@@ -418,7 +494,7 @@ public class SleepingQueensGameEngine(
             CardType.SleepingPotion => game.Settings.AllowSleepingPotions &&
                                      CanPlayPotion(card, state, player, targetQueenId ?? Guid.Empty, out _),
             CardType.Jester => game.Settings.AllowJester,
-            CardType.Number => true, // Always allowed
+            CardType.Number => true,
             _ => false
         };
     }
@@ -438,7 +514,6 @@ public class SleepingQueensGameEngine(
             var score = player.Queens.Sum(q => q.PointValue);
             if (score >= state.Game.TargetScore)
             {
-                // If exact score required, check equality
                 if (state.Game.Settings.RequireExactScoreToWin && score != state.Game.TargetScore)
                     continue;
 
@@ -457,31 +532,9 @@ public class SleepingQueensGameEngine(
         if (player == null || player.Type == PlayerType.Human)
             return new GameActionResult(false, "Not an AI player");
 
-        // Get AI logic based on difficulty
-        var aiLogic = GetAILogic(player.Type);
-
-        // Decide what move to make
-        var decision = await aiLogic.DecideMoveAsync(gameId, aiPlayerId);
-
-        if (decision.Action == AIAction.PlayCard && decision.CardId.HasValue)
-        {
-            return await PlayCardAsync(
-                gameId,
-                aiPlayerId,
-                decision.CardId.Value,
-                decision.TargetPlayerId,
-                decision.TargetQueenId);
-        }
-        else if (decision.Action == AIAction.DrawCard)
-        {
-            return await DrawCardAsync(gameId, aiPlayerId);
-        }
-        else if (decision.Action == AIAction.EndTurn)
-        {
-            return await EndTurnAsync(gameId, aiPlayerId);
-        }
-
-        return new GameActionResult(false, "AI couldn't decide on a move");
+        // Simple AI: just draw a card for now
+        // You can replace this with your Silverlight AI logic
+        return await DrawCardAsync(gameId, aiPlayerId);
     }
 
     public async Task ProcessAllAITurnsAsync(Guid gameId)
@@ -512,20 +565,24 @@ public class SleepingQueensGameEngine(
 
     public async Task<GameSettings> GetGameSettingsAsync(Guid gameId)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
+        var game = await _gameRepository.GetByIdAsync(gameId);
+        if (game == null)
+            throw new ArgumentException($"Game {gameId} not found");
+
         return game.Settings;
     }
 
     // ========== PRIVATE HELPER METHODS ==========
 
-    private static string GenerateGameCode()
+    private string GenerateGameCode()
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         var random = new Random();
-        return new string([.. Enumerable.Repeat(chars, 6).Select(s => s[random.Next(s.Length)])]);
+        return new string(Enumerable.Repeat(chars, 6)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
     }
 
-    private static bool IsCardTypeEnabled(CardType cardType, GameSettings settings)
+    private bool IsCardTypeEnabled(CardType cardType, GameSettings settings)
     {
         return cardType switch
         {
@@ -535,19 +592,8 @@ public class SleepingQueensGameEngine(
             CardType.SleepingPotion => settings.SleepingPotionCount > 0 && settings.AllowSleepingPotions,
             CardType.Jester => settings.JesterCardCount > 0 && settings.AllowJester,
             CardType.Number => true,
-            CardType.Queen => false, // Queens are not played from hand
+            CardType.Queen => false,
             _ => false
-        };
-    }
-
-    private EasyAILogic GetAILogic(PlayerType playerType)
-    {
-        return playerType switch
-        {
-            PlayerType.AI_Easy => new EasyAILogic(_gameRepository, _logger),
-            PlayerType.AI_Medium => new EasyAILogic(_gameRepository, _logger), // TODO: create MediumAI
-            PlayerType.AI_Hard => new EasyAILogic(_gameRepository, _logger), // TODO: create Hard AI
-            _ => new EasyAILogic(_gameRepository, _logger)
         };
     }
 
@@ -580,17 +626,17 @@ public class SleepingQueensGameEngine(
         // Add to discard
         await _gameRepository.DiscardCardAsync(state.Game.Id, card.Id);
 
-        // Update game state
-        var updatedState = await GetGameStateAsync(state.Game.Id);
+        var gameStateDto = await GetGameStateDtoAsync(state.Game.Id);
+        var gameEvent = new GameEventDto
+        {
+            Type = GameEventType.QueenWoken,
+            Description = $"{player.Name} woke {queenToWake.Name}!",
+            Timestamp = DateTime.UtcNow,
+            Data = new { Player = player.Name, Queen = queenToWake.Name }
+        };
 
-        return new GameActionResult(
-            true,
-            $"{player.Name} woke {queenToWake.Name}!",
-            updatedState,
-            new GameEvent(
-                GameEventType.QueenWoken,
-                $"{player.Name} woke {queenToWake.Name}",
-                Data: new { Player = player.Name, Queen = queenToWake.Name }));
+        return new GameActionResult(true, $"{player.Name} woke {queenToWake.Name}!",
+            gameStateDto, gameEvent);
     }
 
     private async Task<GameActionResult> HandleKnightCardAsync(GameState state,
@@ -602,7 +648,7 @@ public class SleepingQueensGameEngine(
 
         // Get a random queen from target player
         var queens = targetPlayer.Queens.ToList();
-        if (queens.Count == 0)
+        if (!queens.Any())
             return new GameActionResult(false, "Target player has no queens");
 
         var random = new Random();
@@ -617,42 +663,46 @@ public class SleepingQueensGameEngine(
         // Add to discard
         await _gameRepository.DiscardCardAsync(state.Game.Id, card.Id);
 
-        var updatedState = await GetGameStateAsync(state.Game.Id);
+        var gameStateDto = await GetGameStateDtoAsync(state.Game.Id);
+        var gameEvent = new GameEventDto
+        {
+            Type = GameEventType.QueenStolen,
+            Description = $"{player.Name} stole {queenToSteal.Name} from {targetPlayer.Name}!",
+            Timestamp = DateTime.UtcNow,
+            Data = new
+            {
+                Attacker = player.Name,
+                Defender = targetPlayer.Name,
+                Queen = queenToSteal.Name
+            }
+        };
 
-        return new GameActionResult(
-            true,
+        return new GameActionResult(true,
             $"{player.Name} stole {queenToSteal.Name} from {targetPlayer.Name}!",
-            updatedState,
-            new GameEvent(
-                GameEventType.QueenStolen,
-                $"{player.Name} stole {queenToSteal.Name} from {targetPlayer.Name}",
-                Data: new
-                {
-                    Attacker = player.Name,
-                    Defender = targetPlayer.Name,
-                    Queen = queenToSteal.Name
-                }));
+            gameStateDto,
+            gameEvent);
     }
 
     private async Task<GameActionResult> HandleDragonCardAsync(GameState state,
         Player player, Card card, Guid? targetPlayerId)
     {
-        // Dragon is usually played defensively when attacked by Knight
-        // For now, just discard it (actual defense logic would be in response to Knight)
+        // Dragon is usually played defensively
+        // For now, just discard it
 
         await _gameRepository.RemoveCardFromPlayerHandAsync(player.Id, card.Id);
         await _gameRepository.DiscardCardAsync(state.Game.Id, card.Id);
 
-        var updatedState = await GetGameStateAsync(state.Game.Id);
+        var gameStateDto = await GetGameStateDtoAsync(state.Game.Id);
+        var gameEvent = new GameEventDto
+        {
+            Type = GameEventType.DragonBlocked,
+            Description = $"{player.Name} played Dragon for protection",
+            Timestamp = DateTime.UtcNow,
+            Data = new { Player = player.Name }
+        };
 
-        return new GameActionResult(
-            true,
-            $"{player.Name} played Dragon for protection",
-            updatedState,
-            new GameEvent(
-                GameEventType.DragonBlocked,
-                $"{player.Name} has dragon protection",
-                Data: new { Player = player.Name }));
+        return new GameActionResult(true, $"{player.Name} played Dragon for protection",
+            gameStateDto, gameEvent);
     }
 
     private async Task<GameActionResult> HandlePotionCardAsync(GameState state,
@@ -674,24 +724,25 @@ public class SleepingQueensGameEngine(
         // Add to discard
         await _gameRepository.DiscardCardAsync(state.Game.Id, card.Id);
 
-        var updatedState = await GetGameStateAsync(state.Game.Id);
+        var gameStateDto = await GetGameStateDtoAsync(state.Game.Id);
+        var gameEvent = new GameEventDto
+        {
+            Type = GameEventType.PotionUsed,
+            Description = $"{player.Name} put {targetQueen.Name} to sleep!",
+            Timestamp = DateTime.UtcNow,
+            Data = new { Player = player.Name, Queen = targetQueen.Name }
+        };
 
-        return new GameActionResult(
-            true,
+        return new GameActionResult(true,
             $"{player.Name} put {targetQueen.Name} to sleep!",
-            updatedState,
-            new GameEvent(
-                GameEventType.PotionUsed,
-                $"{player.Name} put {targetQueen.Name} to sleep",
-                Data: new { Player = player.Name, Queen = targetQueen.Name }));
+            gameStateDto,
+            gameEvent);
     }
 
     private async Task<GameActionResult> HandleJesterCardAsync(GameState state,
         Player player, Card card)
     {
-        // Jester: Draw a card, if it's a face card (King, Knight, Dragon, Potion, Jester), 
-        // keep it and play again. If number card, turn ends.
-
+        // Jester: Draw a card, if it's a face card, keep it and play again
         var drawnCard = await _gameRepository.DrawCardFromDeckAsync(state.Game.Id);
         if (drawnCard == null)
             return new GameActionResult(false, "Deck is empty");
@@ -715,7 +766,7 @@ public class SleepingQueensGameEngine(
             ? $"{player.Name} played Jester and drew {drawnCard.Card.Name}! They get another turn!"
             : $"{player.Name} played Jester and drew {drawnCard.Card.Name}. Turn ends.";
 
-        var updatedState = await GetGameStateAsync(state.Game.Id);
+        var gameStateDto = await GetGameStateDtoAsync(state.Game.Id);
 
         // If not face card, end turn automatically
         if (!isFaceCard)
@@ -723,33 +774,27 @@ public class SleepingQueensGameEngine(
             await EndTurnAsync(state.Game.Id, player.Id);
         }
 
-        return new GameActionResult(
-            true,
-            message,
-            updatedState);
+        return new GameActionResult(true, message, gameStateDto);
     }
 
     private async Task<GameActionResult> HandleNumberCardAsync(GameState state,
         Player player, Card card)
     {
         // Number cards are usually played in pairs or runs
-        // This handler would be called when playing a single number card
-        // For pairs/runs, there would be a separate method
+        // This handler is for single number card play
 
         await _gameRepository.RemoveCardFromPlayerHandAsync(player.Id, card.Id);
         await _gameRepository.DiscardCardAsync(state.Game.Id, card.Id);
 
-        var updatedState = await GetGameStateAsync(state.Game.Id);
+        var gameStateDto = await GetGameStateDtoAsync(state.Game.Id);
 
-        return new GameActionResult(
-            true,
-            $"{player.Name} played {card.Name}",
-            updatedState);
+        return new GameActionResult(true, $"{player.Name} played {card.Name}",
+            gameStateDto);
     }
 
     // ========== VALIDATION METHODS ==========
 
-    private static bool CanPlayKing(Card card, GameState state, Player player, out string? errorMessage)
+    private bool CanPlayKing(Card card, GameState state, Player player, out string? errorMessage)
     {
         errorMessage = null;
 
@@ -759,7 +804,7 @@ public class SleepingQueensGameEngine(
             return false;
         }
 
-        if (state.SleepingQueens.Count == 0)
+        if (!state.SleepingQueens.Any())
         {
             errorMessage = "No sleeping queens to wake";
             return false;
@@ -768,7 +813,7 @@ public class SleepingQueensGameEngine(
         return true;
     }
 
-    private static bool CanPlayKnight(Card card, GameState state, Player player,
+    private bool CanPlayKnight(Card card, GameState state, Player player,
         Guid targetPlayerId, out string? errorMessage)
     {
         errorMessage = null;
@@ -792,7 +837,7 @@ public class SleepingQueensGameEngine(
             return false;
         }
 
-        if (targetPlayer.Queens.Count == 0)
+        if (!targetPlayer.Queens.Any())
         {
             errorMessage = "Target player has no queens to steal";
             return false;
@@ -811,7 +856,7 @@ public class SleepingQueensGameEngine(
         return true;
     }
 
-    private static bool CanPlayPotion(Card card, GameState state, Player player,
+    private bool CanPlayPotion(Card card, GameState state, Player player,
         Guid targetQueenId, out string? errorMessage)
     {
         errorMessage = null;
@@ -837,5 +882,32 @@ public class SleepingQueensGameEngine(
         }
 
         return true;
+    }
+
+    // Helper method for GameRepository
+    private async Task<IEnumerable<Queen>> GetQueensForGameAsync(Guid gameId)
+    {
+        return await _gameRepository.GetQueensForGameAsync(gameId);
+    }
+}
+
+// Extension method for GameRepository (add this to GameRepository.cs)
+public static class GameRepositoryExtensions
+{
+    public static async Task<List<Queen>> GetQueensForGameAsync(this IGameRepository repository, Guid gameId)
+    {
+        // This method should be implemented in GameRepository
+        // For now, combine sleeping and player queens
+        var sleepingQueens = await repository.GetSleepingQueensAsync(gameId);
+        var allQueens = new List<Queen>(sleepingQueens);
+
+        var players = await repository.GetPlayersInGameAsync(gameId);
+        foreach (var player in players)
+        {
+            var playerQueens = await repository.GetPlayerQueensAsync(player.Id);
+            allQueens.AddRange(playerQueens);
+        }
+
+        return allQueens;
     }
 }

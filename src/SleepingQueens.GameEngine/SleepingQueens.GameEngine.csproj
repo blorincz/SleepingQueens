@@ -8,7 +8,6 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\SleepingQueens.Shared\SleepingQueens.Shared.csproj" />
-		<ProjectReference Include="..\SleepingQueens.Server\SleepingQueens.Server.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

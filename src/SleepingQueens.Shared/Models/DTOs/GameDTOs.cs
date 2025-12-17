@@ -1,13 +1,7 @@
 ﻿using SleepingQueens.Shared.Models.Game;
+using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Shared.Models.DTOs;
-
-public class CreateGameRequest
-{
-    public string PlayerName { get; set; } = string.Empty;
-    public GameSettings Settings { get; set; } = GameSettings.Default;
-    public string? ConnectionId { get; set; }
-}
 
 public class GameResponse
 {

@@ -1,4 +1,4 @@
-﻿namespace SleepingQueens.Shared.Models.Game;
+﻿namespace SleepingQueens.Shared.Models.Game.Enums;
 
 public enum GameStatus
 {
