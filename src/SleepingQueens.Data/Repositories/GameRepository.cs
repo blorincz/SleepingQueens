@@ -1,17 +1,13 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using SleepingQueens.Server.Data.Repositories;  // Interfaces now from Shared
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.DTOs;
-using SleepingQueens.Server.Mapping;
+using SleepingQueens.Data.Mapping;
 using SleepingQueens.Shared.Models.Game.Enums;
 
-namespace SleepingQueens.Server.Data.Repositories;
+namespace SleepingQueens.Data.Repositories;
 
-public class GameRepository : BaseRepository<Game>, IGameRepository
+public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>(context), IGameRepository
 {
-    public GameRepository(ApplicationDbContext context) : base(context)
-    {
-    }
 
     // ========== GAME OPERATIONS ==========
 
@@ -59,8 +55,7 @@ public class GameRepository : BaseRepository<Game>, IGameRepository
 
         for (int attempt = 0; attempt < 10; attempt++)
         {
-            var code = new string(Enumerable.Repeat(chars, 6)
-                .Select(s => s[random.Next(s.Length)]).ToArray());
+            var code = new string([.. Enumerable.Repeat(chars, 6).Select(s => s[random.Next(s.Length)])]);
 
             if (!await CodeExistsAsync(code))
                 return code;
@@ -82,10 +77,7 @@ public class GameRepository : BaseRepository<Game>, IGameRepository
 
     public async Task<Player> AddPlayerAsync(Guid gameId, Player player)
     {
-        var game = await _context.Games.FindAsync(gameId);
-        if (game == null)
-            throw new ArgumentException($"Game with ID {gameId} not found");
-
+        var game = await _context.Games.FindAsync(gameId) ?? throw new ArgumentException($"Game with ID {gameId} not found");
         if (game.Players.Count >= game.MaxPlayers)
             throw new InvalidOperationException("Game is full");
 
@@ -301,10 +293,7 @@ public class GameRepository : BaseRepository<Game>, IGameRepository
 
     public async Task TransferQueenAsync(Guid queenId, Guid toPlayerId)
     {
-        var queen = await GetQueenByIdAsync(queenId);
-        if (queen == null)
-            throw new ArgumentException($"Queen with ID {queenId} not found");
-
+        var queen = await GetQueenByIdAsync(queenId) ?? throw new ArgumentException($"Queen with ID {queenId} not found");
         queen.PlayerId = toPlayerId;
         queen.IsAwake = true;
 
@@ -313,10 +302,7 @@ public class GameRepository : BaseRepository<Game>, IGameRepository
 
     public async Task PutQueenToSleepAsync(Guid queenId)
     {
-        var queen = await GetQueenByIdAsync(queenId);
-        if (queen == null)
-            throw new ArgumentException($"Queen with ID {queenId} not found");
-
+        var queen = await GetQueenByIdAsync(queenId) ?? throw new ArgumentException($"Queen with ID {queenId} not found");
         queen.PlayerId = null;
         queen.IsAwake = false;
 
@@ -325,10 +311,7 @@ public class GameRepository : BaseRepository<Game>, IGameRepository
 
     public async Task WakeQueenAsync(Guid queenId, Guid playerId)
     {
-        var queen = await GetQueenByIdAsync(queenId);
-        if (queen == null)
-            throw new ArgumentException($"Queen with ID {queenId} not found");
-
+        var queen = await GetQueenByIdAsync(queenId) ?? throw new ArgumentException($"Queen with ID {queenId} not found");
         queen.PlayerId = playerId;
         queen.IsAwake = true;
 
@@ -390,9 +373,9 @@ public class GameRepository : BaseRepository<Game>, IGameRepository
         // Use GameStateMapper with entity moves (Option A)
         return GameStateMapper.ToDto(
             game,
-            game.Players.ToList(),
-            game.Queens.ToList(),
-            game.DeckCards.ToList(),
+            [.. game.Players],
+            [.. game.Queens],
+            [.. game.DeckCards],
             recentMoves
         );
     }
@@ -541,10 +524,7 @@ public class GameRepository : BaseRepository<Game>, IGameRepository
 
     public async Task UpdateGameSettingsAsync(Guid gameId, GameSettings settings)
     {
-        var game = await GetByIdAsync(gameId);
-        if (game == null)
-            throw new ArgumentException($"Game with ID {gameId} not found");
-
+        var game = await GetByIdAsync(gameId) ?? throw new ArgumentException($"Game with ID {gameId} not found");
         game.Settings = settings;
         await _context.SaveChangesAsync();
     }

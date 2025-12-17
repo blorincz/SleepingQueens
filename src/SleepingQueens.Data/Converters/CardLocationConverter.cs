@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SleepingQueens.Shared.Models.Game.Enums;
 
-namespace SleepingQueens.Server.Data.Converters;
+namespace SleepingQueens.Data.Converters;
 
 public class CardLocationConverter : ValueConverter<CardLocation, string>
 {

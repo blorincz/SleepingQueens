@@ -1,10 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using SleepingQueens.Server.Data.Converters;
+using SleepingQueens.Data.Converters;
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 using System.Text.Json;
 
-namespace SleepingQueens.Server.Data;
+namespace SleepingQueens.Data;
 
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : DbContext(options)
 {

@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
-using SleepingQueens.Server.Data.Repositories;
+﻿using SleepingQueens.Data.Repositories;
 
 namespace SleepingQueens.Server.AI;
 

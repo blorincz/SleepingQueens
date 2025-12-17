@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using SleepingQueens.Server.Data;
-using SleepingQueens.Server.Data.Repositories;
-using SleepingQueens.Server.Data.UnitOfWork;
+using SleepingQueens.Data;
+using SleepingQueens.Data.Repositories;
+using SleepingQueens.Data.UnitOfWork;
 using SleepingQueens.Server.Hubs;
 using System.Text.Json;
 using System.Text.Json.Serialization;

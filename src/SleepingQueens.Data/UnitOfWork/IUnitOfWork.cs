@@ -1,6 +1,6 @@
-﻿using SleepingQueens.Server.Data.Repositories;
+﻿using SleepingQueens.Data.Repositories;
 
-namespace SleepingQueens.Server.Data.UnitOfWork;
+namespace SleepingQueens.Data.UnitOfWork;
 
 public interface IUnitOfWork : IDisposable
 {

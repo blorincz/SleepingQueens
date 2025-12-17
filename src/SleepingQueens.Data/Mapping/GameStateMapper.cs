@@ -3,7 +3,7 @@ using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 using System.Text.Json;
 
-namespace SleepingQueens.Server.Mapping;
+namespace SleepingQueens.Data.Mapping;
 
 public static class GameStateMapper
 {
@@ -25,24 +25,21 @@ public static class GameStateMapper
         {
             Game = ToDto(game),
             Players = playerDtos,
-            SleepingQueens = sleepingQueens.Select(ToDto).ToList(),
-            AwakenedQueens = awakenedQueens.Select(ToDto).ToList(),
-            DeckCards = deckCards
+            SleepingQueens = [.. sleepingQueens.Select(ToDto)],
+            AwakenedQueens = [.. awakenedQueens.Select(ToDto)],
+            DeckCards = [.. deckCards
                 .Where(gc => gc.Location == CardLocation.Deck)
-                .Select(gc => ToDto(gc.Card))
-                .ToList(),
-            DiscardPile = deckCards
+                .Select(gc => ToDto(gc.Card))],
+            DiscardPile = [.. deckCards
                 .Where(gc => gc.Location == CardLocation.Discard)
-                .Select(gc => ToDto(gc.Card))
-                .ToList(),
-            RecentMoves = moves
+                .Select(gc => ToDto(gc.Card))],
+            RecentMoves = [.. moves
                 .OrderByDescending(m => m.Timestamp)
                 .Take(10)
                 .Select(m => ToDto(m,
                     m.Player != null && playerDict.TryGetValue(m.Player.Id, out var playerDto)
                         ? playerDto
-                        : null))
-                .ToList(),
+                        : null))],
             CurrentPlayer = players.FirstOrDefault(p => p.IsCurrentTurn) is Player currentPlayer
                 ? ToDto(currentPlayer)
                 : null,
@@ -76,11 +73,10 @@ public static class GameStateMapper
             Type = player.Type,
             Score = player.Score,
             IsCurrentTurn = player.IsCurrentTurn,
-            Hand = player.PlayerCards
+            Hand = [.. player.PlayerCards
                 .OrderBy(pc => pc.HandPosition)
-                .Select(pc => ToDto(pc.Card))
-                .ToList(),
-            Queens = player.Queens.Select(ToDto).ToList()
+                .Select(pc => ToDto(pc.Card))],
+            Queens = [.. player.Queens.Select(ToDto)]
         };
     }
 

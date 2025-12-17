@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using SleepingQueens.Server.Data.Repositories;
+using SleepingQueens.Data.Repositories;
 using SleepingQueens.Server.GameEngine;
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
+using SleepingQueens.Server.Logging;
 
 namespace SleepingQueens.Server.Controllers;
 
@@ -69,7 +70,7 @@ public class GamesController(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting game {GameId}", id);
+            _logger.LogGameFetchError(ex, id);
             return StatusCode(500, "Internal server error");
         }
     }
@@ -100,7 +101,7 @@ public class GamesController(
                 Success = true
             };
 
-            _logger.LogInformation("Game created via API: {GameCode}", game.Code);
+            _logger.LogGameCreated(game.Code);
 
             return CreatedAtAction(nameof(GetGame), new { id = game.Id }, response);
         }
@@ -160,7 +161,7 @@ public class GamesController(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error joining game {GameCode}", gameCode);
+            _logger.LogGameJoinError(ex, gameCode);
             return BadRequest(new JoinGameResponseDto
             {
                 Success = false,
@@ -190,7 +191,7 @@ public class GamesController(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error starting game {GameId}", id);
+            _logger.LogGameStartError(ex, id);
             return BadRequest(ex.Message);
         }
     }

@@ -2,7 +2,7 @@
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 
-namespace SleepingQueens.Server.Data.Repositories;
+namespace SleepingQueens.Data.Repositories;
 
 public interface IGameRepository
 {

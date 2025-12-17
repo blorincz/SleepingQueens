@@ -1,9 +1,10 @@
 ﻿using System.Text.Json;
-using SleepingQueens.Server.Data.Repositories; // IGameRepository, ICardRepository
+using SleepingQueens.Data.Repositories; // IGameRepository, ICardRepository
 using SleepingQueens.Shared.Models.DTOs;       // DTOs
 using SleepingQueens.Shared.Models.Game;       // Domain models
-using SleepingQueens.Server.Mapping;
-using SleepingQueens.Shared.Models.Game.Enums;           // GameStateMapper
+using SleepingQueens.Data.Mapping;
+using SleepingQueens.Shared.Models.Game.Enums;
+using SleepingQueens.Server.Logging;           // GameStateMapper
 
 namespace SleepingQueens.Server.GameEngine;
 
@@ -57,8 +58,7 @@ public class SleepingQueensGameEngine(
 
         await _gameRepository.UpdateAsync(game);
 
-        _logger.LogInformation("Game {GameId} started with {PlayerCount} players",
-            gameId, game.Players.Count);
+        _logger.LogGameStarted(gameId, game.Players.Count);
 
         return game;
     }
@@ -72,7 +72,7 @@ public class SleepingQueensGameEngine(
 
         await _gameRepository.UpdateAsync(game);
 
-        _logger.LogInformation("Game {GameId} ended", gameId);
+        _logger.LogGameEnded(gameId);
 
         return game;
     }
@@ -86,7 +86,7 @@ public class SleepingQueensGameEngine(
 
         await _gameRepository.UpdateAsync(game);
 
-        _logger.LogInformation("Game {GameId} abandoned", gameId);
+        _logger.LogGameAbandoned(gameId);
 
         return game;
     }
@@ -95,10 +95,7 @@ public class SleepingQueensGameEngine(
 
     public async Task<Player> AddPlayerAsync(Guid gameId, Player player)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId);
-        if (game == null)
-            throw new ArgumentException($"Game {gameId} not found");
-
+        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
         if (game.IsFull())
             throw new InvalidOperationException("Game is full");
 
@@ -107,8 +104,7 @@ public class SleepingQueensGameEngine(
 
         var addedPlayer = await _gameRepository.AddPlayerAsync(gameId, player);
 
-        _logger.LogInformation("Player {PlayerName} joined game {GameId}",
-            player.Name, gameId);
+        _logger.LogPlayerJoined(player.Name, gameId);
 
         return addedPlayer;
     }
@@ -135,21 +131,16 @@ public class SleepingQueensGameEngine(
     {
         await _gameRepository.RemovePlayerAsync(playerId);
 
-        _logger.LogInformation("Player {PlayerId} removed from game {GameId}",
-            playerId, gameId);
+        _logger.LogPlayerRemoved( playerId, gameId);
     }
 
     public async Task UpdatePlayerScoreAsync(Guid playerId, int score)
     {
-        var player = await _gameRepository.GetPlayerAsync(playerId);
-        if (player == null)
-            throw new ArgumentException($"Player {playerId} not found");
-
+        var player = await _gameRepository.GetPlayerAsync(playerId) ?? throw new ArgumentException($"Player {playerId} not found");
         player.Score = score;
         await _gameRepository.UpdateAsync(player.Game);
 
-        _logger.LogDebug("Player {PlayerId} score updated to {Score}",
-            playerId, score);
+        _logger.LogPlayerScoreUpdate(playerId, score);
     }
 
     // ========== GAME ACTIONS ==========
@@ -224,7 +215,7 @@ public class SleepingQueensGameEngine(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error playing card in game {GameId}", gameId);
+            _logger.LogGamePlayCardError(ex, gameId);
             return new GameActionResult(false, $"Error: {ex.Message}");
         }
     }
@@ -236,7 +227,7 @@ public class SleepingQueensGameEngine(
         {
             CardType.King => await HandleKingCardAsync(state, player, card, targetQueenId),
             CardType.Knight => await HandleKnightCardAsync(state, player, card, targetPlayerId!.Value),
-            CardType.Dragon => await HandleDragonCardAsync(state, player, card, targetPlayerId),
+            CardType.Dragon => await HandleDragonCardAsync(state, player, card),
             CardType.SleepingPotion => await HandlePotionCardAsync(state, player, card, targetQueenId!.Value),
             CardType.Jester => await HandleJesterCardAsync(state, player, card),
             CardType.Number => await HandleNumberCardAsync(state, player, card),
@@ -288,7 +279,7 @@ public class SleepingQueensGameEngine(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error drawing card in game {GameId}", gameId);
+            _logger.LogGameDrawCardError(ex, gameId);
             return new GameActionResult(false, $"Error: {ex.Message}");
         }
     }
@@ -337,7 +328,7 @@ public class SleepingQueensGameEngine(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error ending turn in game {GameId}", gameId);
+            _logger.LogGameEndTurnError(ex, gameId);
             return new GameActionResult(false, $"Error: {ex.Message}");
         }
     }
@@ -378,7 +369,7 @@ public class SleepingQueensGameEngine(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error discarding cards in game {GameId}", gameId);
+            _logger.LogGameDiscardingError(ex, gameId);
             return new GameActionResult(false, $"Error: {ex.Message}");
         }
     }
@@ -387,10 +378,7 @@ public class SleepingQueensGameEngine(
 
     public async Task<GameState> GetGameStateAsync(Guid gameId)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId);
-        if (game == null)
-            throw new ArgumentException($"Game {gameId} not found");
-
+        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
         var players = await _gameRepository.GetPlayersInGameAsync(gameId);
         var sleepingQueens = await _gameRepository.GetSleepingQueensAsync(gameId);
         var deckCards = await _gameRepository.GetDeckCardsAsync(gameId);
@@ -406,12 +394,12 @@ public class SleepingQueensGameEngine(
         return new GameState
         {
             Game = game,
-            Players = players.ToList(),
-            SleepingQueens = sleepingQueens.ToList(),
+            Players = [.. players],
+            SleepingQueens = [.. sleepingQueens],
             AwakenedQueens = awakenedQueens,
             Deck = new Deck(deckCards.Select(gc => gc.Card)),
-            DiscardPile = discardPile.Select(gc => gc.Card).ToList(),
-            RecentMoves = recentMoves.ToList(),
+            DiscardPile = [.. discardPile.Select(gc => gc.Card)],
+            RecentMoves = [.. recentMoves],
             CurrentPlayer = players.FirstOrDefault(p => p.IsCurrentTurn),
             CurrentPhase = game.Phase
         };
@@ -419,10 +407,7 @@ public class SleepingQueensGameEngine(
 
     public async Task<GameStateDto> GetGameStateDtoAsync(Guid gameId)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId);
-        if (game == null)
-            throw new ArgumentException($"Game {gameId} not found");
-
+        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
         var players = await _gameRepository.GetPlayersInGameAsync(gameId);
         var allQueens = await _gameRepository.GetQueensForGameAsync(gameId);
         var deckCards = await _gameRepository.GetDeckCardsAsync(gameId);
@@ -430,10 +415,10 @@ public class SleepingQueensGameEngine(
 
         return GameStateMapper.ToDto(
             game,
-            players.ToList(),
-            allQueens.ToList(),
-            deckCards.ToList(),
-            moves.ToList());  // Pass entity moves
+            [.. players],
+            [.. allQueens],
+            [.. deckCards],
+            [.. moves]);  // Pass entity moves
     }
 
     public async Task<Player> GetCurrentPlayerAsync(Guid gameId)
@@ -542,29 +527,25 @@ public class SleepingQueensGameEngine(
 
         await _gameRepository.UpdateGameSettingsAsync(gameId, settings);
 
-        _logger.LogInformation("Game {GameId} settings updated", gameId);
+        _logger.LogSettingsUpdated(gameId);
     }
 
     public async Task<GameSettings> GetGameSettingsAsync(Guid gameId)
     {
-        var game = await _gameRepository.GetByIdAsync(gameId);
-        if (game == null)
-            throw new ArgumentException($"Game {gameId} not found");
-
+        var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
         return game.Settings;
     }
 
     // ========== PRIVATE HELPER METHODS ==========
 
-    private string GenerateGameCode()
+    private static string GenerateGameCode()
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         var random = new Random();
-        return new string(Enumerable.Repeat(chars, 6)
-            .Select(s => s[random.Next(s.Length)]).ToArray());
+        return new string([.. Enumerable.Repeat(chars, 6).Select(s => s[random.Next(s.Length)])]);
     }
 
-    private bool IsCardTypeEnabled(CardType cardType, GameSettings settings)
+    private static bool IsCardTypeEnabled(CardType cardType, GameSettings settings)
     {
         return cardType switch
         {
@@ -666,7 +647,7 @@ public class SleepingQueensGameEngine(
     }
 
     private async Task<GameActionResult> HandleDragonCardAsync(GameState state,
-        Player player, Card card, Guid? targetPlayerId)
+        Player player, Card card)
     {
         // Dragon is usually played defensively
         // For now, just discard it
@@ -795,7 +776,7 @@ public class SleepingQueensGameEngine(
         return true;
     }
 
-    private bool CanPlayKnight(Card card, GameState state, Player player,
+    private static bool CanPlayKnight(Card card, GameState state, Player player,
         Guid targetPlayerId, out string? errorMessage)
     {
         errorMessage = null;
@@ -819,7 +800,7 @@ public class SleepingQueensGameEngine(
             return false;
         }
 
-        if (!targetPlayer.Queens.Any())
+        if (targetPlayer.Queens.Count == 0)
         {
             errorMessage = "Target player has no queens to steal";
             return false;
@@ -838,7 +819,7 @@ public class SleepingQueensGameEngine(
         return true;
     }
 
-    private bool CanPlayPotion(Card card, GameState state, Player player,
+    private static bool CanPlayPotion(Card card, GameState state, Player player,
         Guid targetQueenId, out string? errorMessage)
     {
         errorMessage = null;

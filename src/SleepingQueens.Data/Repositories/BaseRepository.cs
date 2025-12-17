@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
-namespace SleepingQueens.Server.Data.Repositories;
+namespace SleepingQueens.Data.Repositories;
 
 public abstract class BaseRepository<T> : IRepository<T> where T : class
 {

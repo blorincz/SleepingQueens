@@ -1,9 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using SleepingQueens.Server.Data.Repositories;  // Interface from Shared
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 
-namespace SleepingQueens.Server.Data.Repositories;
+namespace SleepingQueens.Data.Repositories;
 
 public class CardRepository(ApplicationDbContext context) : ICardRepository
 {

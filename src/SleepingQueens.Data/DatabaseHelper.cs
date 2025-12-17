@@ -1,7 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using SleepingQueens.Shared.Models.Game;
 
-namespace SleepingQueens.Server.Data;
+namespace SleepingQueens.Data;
 
 public static class DatabaseHelper
 {

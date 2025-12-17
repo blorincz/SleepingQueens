@@ -13,6 +13,6 @@ public class Card
     public bool IsSpecialCard => Type != CardType.Number;
 
     // Navigation properties
-    public virtual ICollection<PlayerCard> PlayerCards { get; set; } = new List<PlayerCard>();
-    public virtual ICollection<GameCard> GameCards { get; set; } = new List<GameCard>();
+    public virtual ICollection<PlayerCard> PlayerCards { get; set; } = [];
+    public virtual ICollection<GameCard> GameCards { get; set; } = [];
 }

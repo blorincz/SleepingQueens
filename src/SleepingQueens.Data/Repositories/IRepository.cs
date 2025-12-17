@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 
-namespace SleepingQueens.Server.Data.Repositories;
+namespace SleepingQueens.Data.Repositories;
 
 public interface IRepository<T> where T : class
 {

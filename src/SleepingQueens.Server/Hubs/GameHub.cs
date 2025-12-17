@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using SleepingQueens.Server.Data.Repositories;
+using SleepingQueens.Data.Repositories;
 using SleepingQueens.Server.GameEngine;        // IGameEngine from Shared
+using SleepingQueens.Server.Logging;
 using SleepingQueens.Shared.Models.DTOs;       // DTOs from Shared
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;       // Domain models from Shared
@@ -22,7 +23,7 @@ public class GameHub(
 
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation("Client connected: {ConnectionId}", Context.ConnectionId);
+        _logger.LogClientConnected(Context.ConnectionId);
         await base.OnConnectedAsync();
     }
 
@@ -34,7 +35,7 @@ public class GameHub(
             await HandlePlayerDisconnect(playerId);
         }
 
-        _logger.LogInformation("Client disconnected: {ConnectionId}", Context.ConnectionId);
+        _logger.LogClientDisconnected(Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 
@@ -44,7 +45,7 @@ public class GameHub(
     {
         try
         {
-            _logger.LogInformation("Creating game for player: {PlayerName}", request.PlayerName);
+            _logger.LogGameCreatedForPlayer(request.PlayerName);
 
             var creator = new Player
             {
@@ -87,7 +88,7 @@ public class GameHub(
 
         try
         {
-            _logger.LogInformation("Player {PlayerName} joining game {GameCode}", playerName, gameCode);
+            _logger.LogPlayerJoinedGame(playerName, gameCode);
 
             var game = await _gameRepository.GetByCodeAsync(gameCode);
             if (game == null)
@@ -374,7 +375,7 @@ public class GameHub(
         else if (game?.Status == GameStatus.Active)
         {
             // Could implement reconnection logic here
-            _logger.LogWarning("Player {PlayerId} disconnected during active game", playerId);
+            _logger.LogPlayerDisconnectedWarning(playerId);
         }
     }
 }

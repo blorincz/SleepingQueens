@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using SleepingQueens.Server.Data.Repositories;
+using SleepingQueens.Data.Repositories;
+using SleepingQueens.Server.Logging;
 using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Server.Controllers;
@@ -34,7 +35,7 @@ public class PlayersController(IGameRepository gameRepository, ILogger<PlayersCo
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting player {PlayerId}", id);
+            _logger.LogPlayerFetchError(ex, id);
             return StatusCode(500, "Internal server error");
         }
     }
@@ -59,7 +60,7 @@ public class PlayersController(IGameRepository gameRepository, ILogger<PlayersCo
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting players for game {GameId}", gameId);
+            _logger.LogGamePlayerFetchError(ex, gameId);
             return StatusCode(500, "Internal server error");
         }
     }
