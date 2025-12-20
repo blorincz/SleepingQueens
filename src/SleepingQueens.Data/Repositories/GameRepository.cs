@@ -327,7 +327,7 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
         return move;
     }
 
-    public async Task<IEnumerable<Move>> GetGameMovesAsync(Guid gameId, int limit = 50)
+    public async Task<List<Move>> GetGameMovesAsync(Guid gameId, int limit = 50)
     {
         return await _context.Moves
             .Include(m => m.Player)
@@ -382,105 +382,106 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
     public async Task InitializeNewGameAsync(Game game, Player firstPlayer)
     {
-        using var transaction = await _context.Database.BeginTransactionAsync();
+        var executionStrategy = _context.Database.CreateExecutionStrategy();
 
-        try
+        await executionStrategy.ExecuteAsync(async () =>
         {
-            // Add game
-            _context.Games.Add(game);
-            await _context.SaveChangesAsync();
+            using var transaction = await _context.Database.BeginTransactionAsync();
 
-            // Add first player
-            firstPlayer.GameId = game.Id;
-            firstPlayer.IsCurrentTurn = true;
-            _context.Players.Add(firstPlayer);
-            await _context.SaveChangesAsync();
-
-            // Get all standard cards (non-queens)
-            var cards = await _context.Cards
-                .Where(c => c.Type != CardType.Queen)
-                .ToListAsync();
-
-            // Add cards to deck
-            var random = new Random();
-            var shuffledCards = cards.OrderBy(c => random.Next()).ToList();
-
-            for (int i = 0; i < shuffledCards.Count; i++)
+            try
             {
-                var gameCard = new GameCard
-                {
-                    GameId = game.Id,
-                    CardId = shuffledCards[i].Id,
-                    Position = i,
-                    Location = CardLocation.Deck
-                };
-                _context.GameCards.Add(gameCard);
-            }
+                // Add game
+                _context.Games.Add(game);
+                await _context.SaveChangesAsync();
 
-            // Get all queen cards
-            var queenCards = await _context.Cards
-                .Where(c => c.Type == CardType.Queen)
-                .ToListAsync();
+                // Get all standard cards (non-queens)
+                var cards = await _context.Cards
+                    .Where(c => c.Type != CardType.Queen)
+                    .ToListAsync();
 
-            // Add queens to sleeping pool
-            foreach (var queenCard in queenCards)
-            {
-                var queenType = queenCard.Name switch
-                {
-                    "Rose Queen" => QueenType.RoseQueen,
-                    "Cat Queen" => QueenType.CatQueen,
-                    "Dog Queen" => QueenType.DogQueen,
-                    "Peacock Queen" => QueenType.PeacockQueen,
-                    "Rainbow Queen" => QueenType.RainbowQueen,
-                    "Moon Queen" => QueenType.MoonQueen,
-                    "Sun Queen" => QueenType.SunQueen,
-                    "Star Queen" => QueenType.StarQueen,
-                    "Cake Queen" => QueenType.CakeQueen,
-                    "Heart Queen" => QueenType.HeartQueen,
-                    _ => QueenType.RoseQueen
-                };
+                // Add cards to deck
+                var random = new Random();
+                var shuffledCards = cards.OrderBy(c => random.Next()).ToList();
 
-                var queen = new Queen
+                for (int i = 0; i < shuffledCards.Count; i++)
                 {
-                    GameId = game.Id,
-                    Name = queenCard.Name,
-                    PointValue = queenCard.Value,
-                    ImagePath = queenCard.ImagePath,
-                    IsAwake = false,
-                    Type = queenType
-                };
-                _context.Queens.Add(queen);
-            }
-
-            // Draw initial hand for first player (5 cards)
-            for (int i = 0; i < 5; i++)
-            {
-                var gameCard = await DrawCardFromDeckAsync(game.Id);
-                if (gameCard != null)
-                {
-                    await AddCardToPlayerHandAsync(firstPlayer.Id, gameCard.CardId);
+                    var gameCard = new GameCard
+                    {
+                        GameId = game.Id,
+                        CardId = shuffledCards[i].Id,
+                        Position = i,
+                        Location = CardLocation.Deck
+                    };
+                    _context.GameCards.Add(gameCard);
                 }
+
+                // Get all queen cards
+                var queenCards = await _context.Cards
+                    .Where(c => c.Type == CardType.Queen)
+                    .ToListAsync();
+
+                // Add queens to sleeping pool
+                foreach (var queenCard in queenCards)
+                {
+                    var queenType = queenCard.Name switch
+                    {
+                        "Rose Queen" => QueenType.RoseQueen,
+                        "Cat Queen" => QueenType.CatQueen,
+                        "Dog Queen" => QueenType.DogQueen,
+                        "Peacock Queen" => QueenType.PeacockQueen,
+                        "Rainbow Queen" => QueenType.RainbowQueen,
+                        "Moon Queen" => QueenType.MoonQueen,
+                        "Sunflower Queen" => QueenType.SunflowerQueen,
+                        "Starfish Queen" => QueenType.StarfishQueen,
+                        "Cake Queen" => QueenType.CakeQueen,
+                        "Heart Queen" => QueenType.HeartQueen,
+                        "Pancake Queen" => QueenType.PancakeQueen,
+                        "Ladybug Queen" => QueenType.LadybugQueen,
+                        _ => QueenType.RoseQueen
+                    };
+
+                    var queen = new Queen
+                    {
+                        GameId = game.Id,
+                        Name = queenCard.Name,
+                        PointValue = queenCard.Value,
+                        ImagePath = queenCard.ImagePath,
+                        IsAwake = false,
+                        Type = queenType
+                    };
+                    _context.Queens.Add(queen);
+                }
+
+                // Draw initial hand for first player (5 cards)
+                for (int i = 0; i < 5; i++)
+                {
+                    var gameCard = await DrawCardFromDeckAsync(game.Id);
+                    if (gameCard != null)
+                    {
+                        await AddCardToPlayerHandAsync(firstPlayer.Id, gameCard.CardId);
+                    }
+                }
+
+                // Record initial move
+                var initialMove = new Move
+                {
+                    GameId = game.Id,
+                    PlayerId = firstPlayer.Id,
+                    Type = MoveType.DrawCard,
+                    Description = $"Initial hand drawn for {firstPlayer.Name}",
+                    TurnNumber = 1,
+                    Timestamp = DateTime.UtcNow
+                };
+                await RecordMoveAsync(initialMove);
+
+                await transaction.CommitAsync();
             }
-
-            // Record initial move
-            var initialMove = new Move
+            catch
             {
-                GameId = game.Id,
-                PlayerId = firstPlayer.Id,
-                Type = MoveType.DrawCard,
-                Description = $"Initial hand drawn for {firstPlayer.Name}",
-                TurnNumber = 1,
-                Timestamp = DateTime.UtcNow
-            };
-            await RecordMoveAsync(initialMove);
-
-            await transaction.CommitAsync();
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+                await transaction.RollbackAsync();
+                throw;
+            }
+        });
     }
 
     public async Task ShuffleDeckAsync(Guid gameId)
@@ -527,10 +528,5 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
         var game = await GetByIdAsync(gameId) ?? throw new ArgumentException($"Game with ID {gameId} not found");
         game.Settings = settings;
         await _context.SaveChangesAsync();
-    }
-
-    Task<List<Move>> IGameRepository.GetGameMovesAsync(Guid gameId, int limit)
-    {
-        throw new NotImplementedException();
     }
 }

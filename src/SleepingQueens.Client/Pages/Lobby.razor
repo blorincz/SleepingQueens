@@ -1,0 +1,433 @@
+﻿@page "/lobby/{GameCode}"
+@inherits AsyncComponentBase
+@using Microsoft.AspNetCore.SignalR
+@using SleepingQueens.Client.Components
+@using SleepingQueens.Client.Services
+@using SleepingQueens.Shared.Models.DTOs
+@using SleepingQueens.Shared.Models.Game.Enums
+@inject ISignalRService SignalRService
+@inject IGameStateService GameStateService
+@inject NavigationManager Navigation
+
+<PageTitle>Game Lobby - @GameCode</PageTitle>
+
+<div class="lobby-container">
+    <div class="lobby-header">
+        <h2>Game Lobby: @GameCode</h2>
+        <div class="game-info">
+            <span class="badge bg-info">Waiting for players...</span>
+        </div>
+    </div>
+
+    <div class="players-list">
+        <h4>Players (@currentPlayerCount/@maxPlayers)</h4>
+        <div class="list-group">
+            @foreach (var player in players)
+            {
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>@player.Name</span>
+                    @if (player.IsCurrentTurn)
+                    {
+                        <span class="badge bg-primary">Host</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (isHost)
+    {
+        <div class="game-settings">
+            <h4>Game Settings</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Max Players</label>
+                        <input type="number" class="form-control" @bind="maxPlayers" min="2" max="6" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Target Score</label>
+                        <input type="number" class="form-control" @bind="targetScore" min="10" max="100" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Player Section -->
+            <div class="ai-players-section">
+                <h5>AI Players</h5>
+                <div class="mb-3">
+                    <label class="form-label">Add AI Player</label>
+                    <div class="input-group">
+                        <select class="form-select" @bind="selectedAILevel">
+                            <option value="Easy">Easy</option>
+                            <option value="Medium" selected>Medium</option>
+                            <option value="Hard">Hard</option>
+                            <option value="Expert">Expert</option>
+                        </select>
+                        <button class="btn btn-outline-primary" @onclick="AddAIPlayer"
+                                @disabled="@(currentPlayerCount >= maxPlayers)">
+                            Add AI
+                        </button>
+                    </div>
+                </div>
+
+                <!-- List of AI Players -->
+                <div class="ai-players-list">
+                    @foreach (var aiPlayer in aiPlayers)
+                    {
+                        <div class="ai-player-item">
+                            <span>@aiPlayer.Name</span>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    @onclick="() => RemovePlayer(aiPlayer.Id)">
+                                Remove
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="lobby-actions">
+            @if (currentPlayerCount >= 2)
+            {
+                <button class="btn btn-success btn-lg" @onclick="StartGame"
+                        @disabled="@(currentPlayerCount < 2)">
+                    Start Game (@currentPlayerCount/@maxPlayers)
+                </button>
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    Need at least 2 players to start
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="lobby-actions">
+            <div class="alert alert-info">
+                Waiting for host to start the game...
+            </div>
+        </div>
+    }
+
+    <div class="chat-section">
+        <h4>Chat</h4>
+        <div class="chat-messages" @ref="chatMessagesContainer">
+            @foreach (var message in chatMessages)
+            {
+                <div class="chat-message">
+                    <strong>@message.PlayerName:</strong> @message.Message
+                </div>
+            }
+        </div>
+        <div class="chat-input">
+            <input type="text" class="form-control" @bind="chatMessage"
+                   placeholder="Type a message..." @onkeypress="HandleChatKeyPress" />
+            <button class="btn btn-primary" @onclick="SendChatMessage">Send</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string GameCode { get; set; } = string.Empty;
+
+    private List<PlayerDto> players = new();
+    private List<ChatMessageDisplay> chatMessages = new();
+    private List<PlayerInfo> aiPlayers = new();
+    private string chatMessage = string.Empty;
+    private ElementReference chatMessagesContainer;
+    private bool isHost = false;
+    private int currentPlayerCount = 0;
+    private int maxPlayers = 4;
+    private int targetScore = 40;
+    private Guid? gameId;
+    private CancellationTokenSource _cts = new CancellationTokenSource();
+    public string lastErrorMessage { get; set; } = string.Empty;
+    private string connectionStatus = "Disconnected";
+    private string selectedAILevel = "Medium";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ExecuteSafeAsync(async () =>
+        {
+            await SignalRService.ConnectAsync();
+            SetupEventSubscriptions();
+
+            if (GameStateService.CurrentGameId.HasValue)
+            {
+                gameId = GameStateService.CurrentGameId.Value;
+                await LoadGameState();
+            }
+        }, OnError);
+    }
+
+    private void OnError(Exception ex)
+    {
+        // Log the error
+        Console.WriteLine($"Error in lobby initialization: {ex.Message}");
+
+        // You can also update UI state to show error to user
+        lastErrorMessage = $"Failed to initialize lobby: {ex.Message}";
+
+        // If it's a connection error, you might want to retry
+        if (ex is HubException || ex.Message.Contains("connection", StringComparison.OrdinalIgnoreCase))
+        {
+            // Optionally show a retry button or auto-retry
+            connectionStatus = "Connection failed. Please refresh the page.";
+        }
+
+        // Force UI update
+        StateHasChanged();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ = ScrollChatToBottom(); // Use discard operator for fire-and-forget
+        }
+    }
+
+    private void SetupEventSubscriptions()
+    {
+        // Subscribe to all async events using the Subscribe method
+        SignalRService.OnGameStateUpdated.Subscribe(HandleGameStateUpdatedAsync);
+        SignalRService.OnPlayerJoined.Subscribe(HandlePlayerJoinedAsync);
+        SignalRService.OnPlayerLeft.Subscribe(HandlePlayerLeftAsync);
+        SignalRService.OnGameStarted.Subscribe(HandleGameStartedAsync);
+        SignalRService.OnChatMessage.Subscribe(HandleChatMessageAsync);
+        SignalRService.OnConnectionStatusChanged.Subscribe(HandleConnectionStatusChangedAsync);
+        SignalRService.OnGameActionResponse.Subscribe(HandleGameActionResponseAsync);
+    }
+
+    private async Task LoadGameState()
+    {
+        if (GameStateService.CurrentGameId.HasValue)
+        {
+            gameId = GameStateService.CurrentGameId.Value;
+            var response = await SignalRService.GetGameStateAsync(gameId.Value);
+
+            if (response.Success && response.Data != null)
+            {
+                UpdateFromGameState(response.Data);
+            }
+        }
+    }
+
+    private void UpdateFromGameState(GameStateDto gameState)
+    {
+        if (gameState.Players != null)
+        {
+            players = gameState.Players.ToList();
+            currentPlayerCount = players.Count;
+
+            // Check if current player is host (first player)
+            if (GameStateService.CurrentPlayerId.HasValue)
+            {
+                isHost = players.Any() && players[0].Id == GameStateService.CurrentPlayerId.Value;
+            }
+        }
+
+        if (gameState.Game != null)
+        {
+            maxPlayers = gameState.Game.MaxPlayers;
+            targetScore = gameState.Game.TargetScore;
+        }
+
+        StateHasChanged();
+    }
+
+    // Event handler methods (must return Task)
+    private async Task HandleGameStateUpdatedAsync(GameStateDto gameState)
+    {
+        await InvokeAsync(() =>
+        {
+            UpdateFromGameState(gameState);
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandlePlayerJoinedAsync(PlayerJoinedEvent playerJoinedEvent)
+    {
+        await InvokeAsync(async () =>
+        {
+            chatMessages.Add(new ChatMessageDisplay
+            {
+                PlayerName = "System",
+                Message = $"{playerJoinedEvent.PlayerName} joined the game"
+            });
+            currentPlayerCount = playerJoinedEvent.TotalPlayers;
+            StateHasChanged();
+            await ScrollChatToBottom();
+        });
+    }
+
+    private async Task HandlePlayerLeftAsync(PlayerLeftEvent playerLeftEvent)
+    {
+        await InvokeAsync(async () =>
+        {
+            chatMessages.Add(new ChatMessageDisplay
+            {
+                PlayerName = "System",
+                Message = $"{playerLeftEvent.PlayerName} left the game"
+            });
+            currentPlayerCount--;
+            StateHasChanged();
+            await ScrollChatToBottom();
+        });
+    }
+
+    private async Task HandleGameStartedAsync(GameStartedEvent gameStartedEvent)
+    {
+        await InvokeAsync(() =>
+        {
+            Navigation.NavigateTo($"/game/{GameCode}");
+        });
+    }
+
+    private async Task HandleChatMessageAsync((string PlayerName, string Message) chatData)
+    {
+        await InvokeAsync(async () =>
+        {
+            chatMessages.Add(new ChatMessageDisplay
+            {
+                PlayerName = chatData.PlayerName,
+                Message = chatData.Message
+            });
+            StateHasChanged();
+            await ScrollChatToBottom();
+        });
+    }
+
+    private async Task HandleConnectionStatusChangedAsync(string status)
+    {
+        await InvokeAsync(() =>
+        {
+            connectionStatus = status;
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleGameActionResponseAsync(ApiResponse response)
+    {
+        await InvokeAsync(() =>
+        {
+            // Handle game action responses (success/error messages)
+            if (!response.Success && !string.IsNullOrEmpty(response.ErrorMessage))
+            {
+                // You could show a toast notification here
+                Console.WriteLine($"Game action error: {response.ErrorMessage}");
+            }
+            StateHasChanged();
+        });
+    }
+
+    private async Task StartGame()
+    {
+        if (!gameId.HasValue || !isHost) return;
+
+        await ExecuteSafeAsync(async () =>
+        {
+            var response = await SignalRService.StartGameAsync(gameId.Value);
+            if (!response.Success)
+            {
+                // Show error message
+                await ShowToast("Error", $"Failed to start game: {response.ErrorMessage}", "danger");
+            }
+        }, OnError);
+    }
+
+    private async Task AddAIPlayer()
+    {
+        if (!gameId.HasValue || !isHost || currentPlayerCount >= maxPlayers) return;
+
+        await ExecuteSafeAsync(async () =>
+        {
+            var level = Enum.Parse<AILevel>(selectedAILevel);
+            var response = await SignalRService.AddAIPlayerAsync(gameId.Value, level);
+
+            if (response.Success)
+            {
+                await ShowToast("Success", $"Added AI player ({selectedAILevel})", "success");
+            }
+            else
+            {
+                await ShowToast("Error", $"Failed to add AI: {response.ErrorMessage}", "danger");
+            }
+        }, OnError);
+    }
+
+    private async Task RemovePlayer(Guid playerId)
+    {
+        if (!gameId.HasValue || !isHost) return;
+
+        await ExecuteSafeAsync(async () =>
+        {
+            var response = await SignalRService.RemovePlayerAsync(gameId.Value, playerId);
+
+            if (response.Success)
+            {
+                await ShowToast("Success", "Player removed", "success");
+            }
+            else
+            {
+                await ShowToast("Error", $"Failed to remove player: {response.ErrorMessage}", "danger");
+            }
+        }, OnError);
+    }
+
+    private async Task ShowToast(string title, string message, string type)
+    {
+        // You can implement a toast notification system here
+        // For now, just log to console
+        Console.WriteLine($"{title}: {message}");
+
+        // You could add a simple alert system
+        chatMessages.Add(new ChatMessageDisplay
+        {
+            PlayerName = "System",
+            Message = $"{title}: {message}"
+        });
+        StateHasChanged();
+        await ScrollChatToBottom();
+    }
+
+    private async Task SendChatMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(chatMessage) && gameId.HasValue)
+        {
+            await SignalRService.SendMessageAsync(gameId.Value, chatMessage);
+            chatMessage = string.Empty;
+        }
+    }
+
+    private async Task HandleChatKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendChatMessage();
+        }
+    }
+
+    private async Task ScrollChatToBottom()
+    {
+        try
+        {
+            await chatMessagesContainer.FocusAsync();
+        }
+        catch
+        {
+            // Ignore focus errors
+        }
+    }
+
+    private class ChatMessageDisplay
+    {
+        public string PlayerName { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+    }
+}

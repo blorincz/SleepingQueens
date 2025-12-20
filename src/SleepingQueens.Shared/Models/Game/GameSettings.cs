@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using SleepingQueens.Shared.Models.Game.Enums;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SleepingQueens.Shared.Models.Game;
@@ -42,11 +43,12 @@ public class GameSettings
 
     // Deck composition
     public int NumberCardCountPerValue { get; set; } = 4;
-    public int KingCardCount { get; set; } = 4;
-    public int KnightCardCount { get; set; } = 3;
+    public int KingCardCount { get; set; } = 8;
+    public int KnightCardCount { get; set; } = 4;
     public int DragonCardCount { get; set; } = 3;
     public int SleepingPotionCount { get; set; } = 4;
     public int JesterCardCount { get; set; } = 5;
+    public int QueenCardCount { get; set; } = 12;
 
     // Scoring variations
     public bool UseStandardScoring { get; set; } = true;
@@ -114,14 +116,6 @@ public class GameSettings
         EnableAnimations = true,
         EnableSound = true
     };
-}
-
-public enum AILevel
-{
-    Easy = 1,
-    Medium = 2,
-    Hard = 3,
-    Expert = 4
 }
 
 // JSON converter for TimeSpan (optional but helpful)

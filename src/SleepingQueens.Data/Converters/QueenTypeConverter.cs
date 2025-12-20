@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SleepingQueens.Shared.Models.Game;
+using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Data.Converters;
 

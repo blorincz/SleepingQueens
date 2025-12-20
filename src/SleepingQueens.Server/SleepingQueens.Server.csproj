@@ -13,10 +13,12 @@
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.0.1" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.1" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\SleepingQueens.Shared\SleepingQueens.Shared.csproj" />
 		<ProjectReference Include="..\SleepingQueens.Data\SleepingQueens.Data.csproj" />
+		<ProjectReference Include="..\SleepingQueens.Client\SleepingQueens.Client.csproj" />
 	</ItemGroup>
 </Project>

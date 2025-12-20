@@ -4,6 +4,7 @@ using SleepingQueens.Server.GameEngine;
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 using SleepingQueens.Server.Logging;
+using SleepingQueens.Shared.Models.DTOs;
 
 namespace SleepingQueens.Server.Controllers;
 
@@ -60,7 +61,6 @@ public class GamesController(
                 Phase = game.Phase,
                 MaxPlayers = game.MaxPlayers,
                 TargetScore = game.TargetScore,
-                PlayerCount = game.Players.Count,
                 CreatedAt = game.CreatedAt,
                 StartedAt = game.StartedAt,
                 EndedAt = game.EndedAt
@@ -195,51 +195,4 @@ public class GamesController(
             return BadRequest(ex.Message);
         }
     }
-}
-
-// API DTOs
-public class GameInfoDto
-{
-    public Guid Id { get; set; }
-    public string Code { get; set; } = string.Empty;
-    public GameStatus Status { get; set; }
-    public int PlayerCount { get; set; }
-    public int MaxPlayers { get; set; }
-    public DateTime CreatedAt { get; set; }
-}
-
-public class GameDto : GameInfoDto
-{
-    public GamePhase Phase { get; set; }
-    public int TargetScore { get; set; }
-    public DateTime? StartedAt { get; set; }
-    public DateTime? EndedAt { get; set; }
-}
-
-public class CreateGameRequestDto
-{
-    public string PlayerName { get; set; } = string.Empty;
-    public GameSettings? Settings { get; set; }
-}
-
-public class CreateGameResponseDto
-{
-    public bool Success { get; set; }
-    public Guid GameId { get; set; }
-    public string GameCode { get; set; } = string.Empty;
-    public Guid PlayerId { get; set; }
-    public string? ErrorMessage { get; set; }
-}
-
-public class JoinGameRequestDto
-{
-    public string PlayerName { get; set; } = string.Empty;
-}
-
-public class JoinGameResponseDto
-{
-    public bool Success { get; set; }
-    public Guid GameId { get; set; }
-    public Guid PlayerId { get; set; }
-    public string? ErrorMessage { get; set; }
 }

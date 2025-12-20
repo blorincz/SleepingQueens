@@ -1,0 +1,113 @@
+﻿@using SleepingQueens.Client.Services
+@using SleepingQueens.Shared.Models.DTOs
+@inject ICardImageService CardImageService
+<div class="queen-display @(IsAwake ? "awake" : "asleep") @(IsSelected ? "selected" : "") @AdditionalClasses"
+     style="@QueenStyle"
+     @onclick="HandleClick"
+     title="@Title">
+    <div class="queen-content">
+        @if (!IsFaceDown)
+        {
+            <div class="queen-name">@Queen?.Name</div>
+            <div class="queen-value">@Queen?.PointValue pts</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public QueenDto? Queen { get; set; }
+
+    [Parameter]
+    public bool IsSelected { get; set; }
+
+    [Parameter]
+    public bool IsFaceDown { get; set; }
+
+    [Parameter]
+    public bool IsAwake { get; set; }
+
+    [Parameter]
+    public bool IsClickable { get; set; } = true;
+
+    [Parameter]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string AdditionalClasses { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<QueenDto> OnQueenClick { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnQueenIdClick { get; set; }
+
+    private string QueenStyle
+    {
+        get
+        {
+            if (IsFaceDown)
+            {
+                return $"background-image: url('/images/cards/backqueen.png');";
+            }
+
+            if (Queen != null && !string.IsNullOrEmpty(Queen.ImagePath))
+            {
+                return $"background-image: url('{Queen.ImagePath}');";
+            }
+
+            // Fallback styling based on queen value
+            return Queen?.PointValue switch
+            {
+                >= 20 => "background: linear-gradient(135deg, #ff6b6b 0%, #c44569 100%); color: white;",
+                >= 15 => "background: linear-gradient(135deg, #ff9ff3 0%, #f368e0 100%); color: white;",
+                >= 10 => "background: linear-gradient(135deg, #4cd964 0%, #44bd32 100%); color: white;",
+                _ => "background: linear-gradient(135deg, #5ac8fa 0%, #0097e6 100%); color: white;"
+            };
+        }
+    }
+
+    private string GetFallbackStyle()
+    {
+        if (Queen == null) return "background: #f8f9fa;";
+
+        // Different backgrounds based on queen type
+        return Queen.Name.ToLower() switch
+        {
+            var name when name.Contains("rose") => "background: linear-gradient(135deg, #e84393 0%, #fd79a8 100%);",
+            var name when name.Contains("starfish") => "background: linear-gradient(135deg, #00cec9 0%, #81ecec 100%);",
+            var name when name.Contains("cake") => "background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);",
+            var name when name.Contains("rainbow") => "background: linear-gradient(135deg, #ff7675 0%, #fdcb6e 33%, #55efc4 66%, #74b9ff 100%);",
+            var name when name.Contains("peacock") => "background: linear-gradient(135deg, #0984e3 0%, #00cec9 100%);",
+            var name when name.Contains("moon") => "background: linear-gradient(135deg, #a29bfe 0%, #dfe6e9 100%);",
+            var name when name.Contains("sunflower") => "background: linear-gradient(135deg, #fdcb6e 0%, #ffeaa7 100%);",
+            var name when name.Contains("ladybug") => "background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white;",
+            var name when name.Contains("cat") => "background: linear-gradient(135deg, #636e72 0%, #b2bec3 100%);",
+            var name when name.Contains("dog") => "background: linear-gradient(135deg, #d35400 0%, #f39c12 100%);",
+            var name when name.Contains("pancake") => "background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);",
+            var name when name.Contains("heart") => "background: linear-gradient(135deg, #ff7675 0%, #fd79a8 100%);",
+            _ => Queen.PointValue switch
+            {
+                >= 20 => "background: linear-gradient(135deg, #ff6b6b 0%, #c44569 100%); color: white;",
+                >= 15 => "background: linear-gradient(135deg, #ff9ff3 0%, #f368e0 100%); color: white;",
+                >= 10 => "background: linear-gradient(135deg, #4cd964 0%, #44bd32 100%); color: white;",
+                _ => "background: linear-gradient(135deg, #5ac8fa 0%, #0097e6 100%); color: white;"
+            }
+        };
+    }
+
+    private async Task HandleClick()
+    {
+        if (!IsClickable || Queen == null) return;
+
+        if (OnQueenClick.HasDelegate)
+        {
+            await OnQueenClick.InvokeAsync(Queen);
+        }
+
+        if (OnQueenIdClick.HasDelegate)
+        {
+            await OnQueenIdClick.InvokeAsync(Queen.Id);
+        }
+    }
+}

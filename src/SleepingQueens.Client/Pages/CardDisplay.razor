@@ -1,0 +1,154 @@
+﻿@using SleepingQueens.Client.Services
+@using SleepingQueens.Shared.Models.DTOs
+@using SleepingQueens.Shared.Models.Game.Enums
+
+<div class="card @AdditionalClasses"
+     style="@CardStyle"
+     @onclick="HandleClick"
+     title="@ComputedTitle">
+    @if (!IsFaceDown)
+    {
+        <div class="card-content">
+            <div class="card-header">
+                @CardIcon
+            </div>
+            <div class="card-body">
+                <div class="card-name">@Card?.Name</div>
+                @if (Card?.Type == CardType.Number)
+                {
+                    <div class="card-value">@Card?.Value</div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public CardDto? Card { get; set; }
+
+    [Parameter]
+    public bool IsSelected { get; set; }
+
+    [Parameter]
+    public bool IsFaceDown { get; set; }
+
+    [Parameter]
+    public bool IsClickable { get; set; } = true;
+
+    [Parameter]
+    public string AdditionalClasses { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<CardDto> OnCardClick { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnCardIdClick { get; set; }
+
+    private string CardStyle
+    {
+        get
+        {
+            if (IsFaceDown)
+            {
+                return $"background-image: url('/images/cards/back.png');";
+            }
+
+            if (Card != null && !string.IsNullOrEmpty(Card.ImagePath))
+            {
+                return $"background-image: url('{Card.ImagePath}');";
+            }
+
+            // Fallback styling based on card type
+            return GetFallbackStyle();
+        }
+    }
+
+    private string GetFallbackStyle()
+    {
+        if (Card == null) return "background: #f8f9fa;";
+
+        // Check if it's a specific king or knight first
+        if (Card.Type == CardType.King)
+        {
+            // Different background colors for different kings
+            return Card.Name.ToLower() switch
+            {
+                var name when name.Contains("bubble gum") => "background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);",
+                var name when name.Contains("chess") => "background: linear-gradient(135deg, #2d3436 0%, #636e72 100%); color: white;",
+                var name when name.Contains("cookie") => "background: linear-gradient(135deg, #d35400 0%, #f39c12 100%);",
+                var name when name.Contains("fire") => "background: linear-gradient(135deg, #e74c3c 0%, #f1c40f 100%);",
+                var name when name.Contains("hat") => "background: linear-gradient(135deg, #8e44ad 0%, #3498db 100%); color: white;",
+                var name when name.Contains("puzzle") => "background: linear-gradient(135deg, #1abc9c 0%, #16a085 100%); color: white;",
+                var name when name.Contains("tie-dye") => "background: linear-gradient(135deg, #ff9ff3 0%, #f368e0 20%, #ff9ff3 40%, #f368e0 60%, #ff9ff3 80%, #f368e0 100%);",
+                var name when name.Contains("turtle") => "background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);",
+                _ => "background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);"
+            };
+        }
+
+        if (Card.Type == CardType.Knight)
+        {
+            return Card.Name.ToLower() switch
+            {
+                var name when name.Contains("black") => "background: linear-gradient(135deg, #2d3436 0%, #636e72 100%); color: white;",
+                var name when name.Contains("blue") => "background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white;",
+                var name when name.Contains("green") => "background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); color: white;",
+                var name when name.Contains("red") => "background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white;",
+                _ => "background: linear-gradient(135deg, #c0c0c0 0%, #e0e0e0 100%);"
+            };
+        }
+
+        return Card.Type switch
+        {
+            CardType.Dragon => "background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);",
+            CardType.SleepingPotion => "background: linear-gradient(135deg, #4cd964 0%, #5ac8fa 100%);",
+            CardType.Jester => "background: linear-gradient(135deg, #ff2d55 0%, #5856d6 100%); color: white;",
+            CardType.Number => "background: linear-gradient(135deg, #5ac8fa 0%, #007aff 100%); color: white;",
+            _ => "background: #f8f9fa;"
+        };
+    }
+
+    private string CardIcon
+    {
+        get
+        {
+            if (Card == null) return "🃏";
+
+            return Card.Type switch
+            {
+                CardType.King => "👑",
+                CardType.Knight => "⚔️",
+                CardType.Dragon => "🐉",
+                CardType.SleepingPotion => "🧪",
+                CardType.Jester => "🃏",
+                CardType.Number => Card.Value.ToString(),
+                CardType.Queen => "👸",
+                _ => "🃏"
+            };
+        }
+    }
+
+    private string ComputedTitle
+    {
+        get
+        {
+            if (Card == null) return string.Empty;
+            return $"{Card.Name} - {Card.Description}";
+        }
+    }
+
+    private async Task HandleClick()
+    {
+        if (!IsClickable || Card == null) return;
+
+        if (OnCardClick.HasDelegate)
+        {
+            await OnCardClick.InvokeAsync(Card);
+        }
+
+        if (OnCardIdClick.HasDelegate)
+        {
+            await OnCardIdClick.InvokeAsync(Card.Id);
+        }
+    }
+}

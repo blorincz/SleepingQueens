@@ -21,6 +21,13 @@ public class SleepingQueensGameEngine(
 
     public Game CreateGame(GameSettings settings, Player creator)
     {
+        // Validate parameters
+        if (settings == null)
+            throw new ArgumentNullException(nameof(settings));
+
+        if (creator == null)
+            throw new ArgumentNullException(nameof(creator)); // Add this check!
+
         // Validate settings
         if (!settings.Validate())
             throw new ArgumentException("Invalid game settings");
@@ -34,11 +41,15 @@ public class SleepingQueensGameEngine(
             TargetScore = settings.TargetScore,
             CreatedAt = DateTime.UtcNow,
             Settings = settings
+            // Players is already initialized to [] in Game constructor
         };
 
         creator.GameId = game.Id;
         creator.IsCurrentTurn = true;
         creator.JoinedAt = DateTime.UtcNow;
+
+        // Add creator to game
+        game.Players.Add(creator);
 
         return game;
     }

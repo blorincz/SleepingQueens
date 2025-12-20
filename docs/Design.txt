@@ -4,167 +4,133 @@ Client (Blazor WASM)
     ↓ References
 Shared (DTOs/Models)
     ↑ References
-Server (API + SignalR)
+Server (API + SignalR + GameEngine)
     ↓ References
-GameEngine (Core Logic)
+Data(Data Layer)
     ↓ References
-Shared (Enums/Extensions)
+Shared (Enums/Extensions/Models/DTOs)
 
-SleepingQueens/                    # Solution Root
-│
-├── SleepingQueens.sln             # Visual Studio Solution File
-│
-├── src/                           # Source Projects
-│   ├── SleepingQueens.Client/     # Blazor WebAssembly Frontend
-│   ├── SleepingQueens.Server/     # ASP.NET Core Backend API + SignalR
-│   ├── SleepingQueens.Shared/     # Shared Models & DTOs
-│   └── SleepingQueens.GameEngine/ # Core Game Logic Library
-│
-├── tests/                         # Test Projects
-│   ├── SleepingQueens.Tests.Unit/
-│   └── SleepingQueens.Tests.Integration/
-│
-├── docs/                          # Documentation
-├── scripts/                       # Deployment & Build Scripts
-└── README.md
+SleepingQueens/
+    ├── SleepingQueens.sln
+    ├── docs/
+    │   └── Design.txt
+    └── src/
+        ├── SleepingQueens.Shared/
+        │   ├── SleepingQueens.Shared.csproj
+        │   └── Models/
+        │       ├── Game/
+        │       │   ├── Card.cs
+        │       │   ├── Game.cs
+        │       │   ├── GameCard.cs
+        │       │   ├── GameSettings.cs
+        │       │   ├── Move.cs
+        │       │   ├── Player.cs
+        │       │   ├── PlayerCard.cs
+        │       │   ├── Queen.cs
+        │       │   └── Enums/
+        │       │       ├── CardLocation.cs
+        │       │       ├── CardType.cs
+        │       │       ├── GameEventType.cs
+        │       │       ├── GamePhase.cs
+        │       │       ├── GameStatus.cs
+        │       │       ├── MoveType.cs
+        │       │       └── PlayerType.cs
+        │       └── DTOs/
+        │           ├── GameDtos.cs
+        │           ├── GameHubDtos.cs
+        │           └── GameStateDto.cs
+        ├── SleepingQueens.Server/
+        │   ├── appsettings.Development.json
+        │   ├── appsettings.json
+        │   ├── Program.cs
+        │   ├── SleepingQueens.Server.csproj
+        │   ├── SleepingQueens.Server.csproj.user
+        │   ├── SleepingQueens.Server.http
+        │   ├── Properties/
+        │   │   └── launchSettings.json
+        │   ├── Logging/
+        │   │   └── LoggerExtensions.cs
+        │   ├── Hubs/
+        │   │   └── GameHub.cs
+        │   ├── GameEngine/
+        │   │   ├── Deck.cs
+        │   │   ├── GameRules.cs
+        │   │   ├── GameState.cs
+        │   │   ├── IGameEngine.cs
+        │   │   └── SleepingQueensGameEngine.cs
+        │   ├── Controllers/
+        │   │   ├── GamesController.cs
+        │   │   └── PlayersController.cs
+        │   └── AI/
+        │       ├── EasyAILogic.cs
+        │       └── IAILogic.cs
+        ├── SleepingQueens.Data/
+        │   ├── ApplicationDbContext.cs
+        │   ├── DatabaseHelper.cs
+        │   ├── SleepingQueens.Data.csproj
+        │   ├── UnitOfWork/
+        │   │   ├── IUnitOfWork.cs
+        │   │   └── UnitOfWork.cs
+        │   ├── Repositories/
+        │   │   ├── BaseRepository.cs
+        │   │   ├── CardRepository.cs
+        │   │   ├── GameRepository.cs
+        │   │   ├── ICardRepository.cs
+        │   │   ├── IGameRepository.cs
+        │   │   └── IRepository.cs
+        │   ├── Mapping/
+        │   │   └── GameStateMapper.cs
+        │   └── Converters/
+        │       ├── CardLocationConverter.cs
+        │       ├── CardTypeConverter.cs
+        │       ├── GamePhaseConverter.cs
+        │       ├── GameStatusConverter.cs
+        │       ├── MoveTypeConverter.cs
+        │       ├── PlayerTypeConverter.cs
+        │       └── QueenTypeConverter.cs
+        └── SleepingQueens.Client/
+            ├── App.razor
+            ├── Program.cs
+            ├── SleepingQueens.Client.csproj
+            ├── SleepingQueens.Client.csproj.user
+            ├── _Imports.razor
+            ├── wwwroot/
+            │   ├── favicon.png
+            │   ├── icon-192.png
+            │   ├── index.html
+            │   └── css/
+            │       └── app.css
+            ├── Properties/
+            │   └── launchSettings.json
+            ├── Pages/
+            │   ├── Counter.razor
+            │   ├── Home.razor
+            │   ├── NotFound.razor
+            │   └── Weather.razor
+            └── Layout/
+                ├── MainLayout.razor
+                ├── MainLayout.razor.css
+                ├── NavMenu.razor
+                └── NavMenu.razor.css
 
-SleepingQueens.Client/
-├── Properties/
-│   └── launchSettings.json
-├── wwwroot/
-│   ├── css/
-│   │   ├── app.css
-│   │   ├── game.css
-│   │   └── animations.css
-│   ├── js/
-│   │   ├── animations.js          # GSAP/Anime.js animations
-│   │   ├── sounds.js              # Howler.js sound manager
-│   │   └── interop.js             # JS interop helpers
-│   ├── images/
-│   │   ├── cards/
-│   │   ├── queens/
-│   │   └── icons/
-│   └── sounds/
-│       ├── card-flip.mp3
-│       ├── queen-wake.mp3
-│       └── knight-attack.mp3
-├── Components/
-│   ├── Game/
-│   │   ├── GameBoard.razor        # Main game board
-│   │   ├── PlayerHand.razor       # Player's card hand
-│   │   ├── CardComponent.razor    # Animated card
-│   │   ├── QueenDisplay.razor     # Queen cards
-│   │   └── AIPlayerView.razor     # AI opponent UI
-│   ├── UI/
-│   │   ├── CardBack.razor
-│   │   ├── ScoreBoard.razor
-│   │   └── GameControls.razor
-│   └── Layout/
-│       ├── MainLayout.razor
-│       └── NavMenu.razor
-├── Pages/
-│   ├── Index.razor               # Lobby/Home
-│   ├── Game.razor                # Game page
-│   ├── CreateGame.razor          # New game setup
-│   ├── JoinGame.razor            # Join existing game
-│   ├── SoloPlay.razor            # Single player vs AI
-│   └── Leaderboard.razor
-├── Services/
-│   ├── GameHubService.cs         # SignalR client service
-│   ├── SoundService.cs           # Audio service (JS interop)
-│   ├── AnimationService.cs       # Animation controller
-│   ├── LocalStorageService.cs    # Browser storage
-│   └── GameStateService.cs       # Client-side state
-├── Models/
-│   ├── ClientGameState.cs        # Client view of game state
-│   └── PlayerInfo.cs
-├── Program.cs
-└── SleepingQueens.Client.csproj
-
-SleepingQueens.Server/
-├── Properties/
-│   └── launchSettings.json
-├── Controllers/
-│   ├── GameController.cs         # REST API endpoints
-│   ├── PlayerController.cs
-│   └── AdminController.cs
-├── Hubs/
-│   ├── GameHub.cs                # SignalR hub for real-time
-│   └── NotificationHub.cs        # Optional: for notifications
-├── Services/
-│   ├── GameManagerService.cs     # Orchestrates game sessions
-│   ├── AIService.cs              # Computer opponent logic
-│   ├── DeckService.cs            # Card deck management
-│   ├── ScoringService.cs         # Score calculation
-│   ├── TurnService.cs            # Turn logic
-│   └── RuleService.cs            # Game rule validation
-├── Data/
-│   ├── ApplicationDbContext.cs   # EF Core DbContext
-│   ├── Entities/
-│   │   ├── Game.cs
-│   │   ├── Player.cs
-│   │   ├── Card.cs
-│   │   └── Move.cs
-│   ├── Migrations/               # EF Core migrations
-│   └── Repository/
-│       ├── IGameRepository.cs
-│       └── GameRepository.cs
-├── Middleware/
-│   ├── ExceptionMiddleware.cs
-│   └── WebSocketMiddleware.cs
-├── Program.cs
-├── appsettings.json
-└── SleepingQueens.Server.csproj
-
-SleepingQueens.Shared/
-├── Models/
-│   ├── Game/
-│   │   ├── Card.cs               # Card definition
-│   │   ├── Deck.cs               # Deck management
-│   │   ├── Player.cs             # Player data
-│   │   ├── GameState.cs          # Complete game state
-│   │   └── GameSettings.cs       # Game configuration
-│   ├── DTOs/
-│   │   ├── CreateGameRequest.cs
-│   │   ├── PlayCardRequest.cs
-│   │   ├── GameStateDto.cs       # Optimized for SignalR
-│   │   └── PlayerDto.cs
-│   └── Enums/
-│       ├── CardType.cs
-│       ├── QueenType.cs
-│       ├── GamePhase.cs
-│       └── PlayerType.cs
-├── Extensions/
-│   ├── CardExtensions.cs
-│   └── GameStateExtensions.cs
-└── SleepingQueens.Shared.csproj
-
-SleepingQueens.GameEngine/
-├── Core/
-│   ├── IGameEngine.cs            # Main game engine interface
-│   ├── GameEngine.cs             # Game logic implementation
-│   └── RuleEngine.cs             # Rule validation
-├── Actions/
-│   ├── IGameAction.cs            # Base action interface
-│   ├── PlayCardAction.cs
-│   ├── DrawCardAction.cs
-│   ├── UseSpecialCardAction.cs
-│   └── EndTurnAction.cs
-├── Cards/
-│   ├── CardFactory.cs            # Creates card instances
-│   ├── ICardEffect.cs            # Card effect interface
-│   └── Effects/
-│       ├── KingEffect.cs
-│       ├── KnightEffect.cs
-│       └── DragonEffect.cs
-├── AI/
-│   ├── IAIPlayer.cs              # AI interface
-│   ├── EasyAIPlayer.cs           # Simple AI
-│   ├── MediumAIPlayer.cs         # Your Silverlight AI logic
-│   └── HardAIPlayer.cs           # Advanced AI
-├── Utilities/
-│   ├── Shuffler.cs               # Card shuffling algorithms
-│   ├── Validator.cs              # Move validation
-│   └── ScoreCalculator.cs
-└── SleepingQueens.GameEngine.csproj
-
+SleepingQueens.Tests/
+├── Integration/
+│   ├── ApiTests/
+│   │   ├── GamesControllerTests.cs
+│   │   ├── PlayersControllerTests.cs
+│   │   └── WebApplicationFactory.cs
+│   ├── SignalRTests/
+│   │   ├── GameHubTests.cs
+│   │   └── SignalRTestBase.cs
+│   └── Database/
+│       ├── DatabaseFixture.cs
+│       └── DatabaseTestBase.cs
+├── Unit/
+│   ├── GameEngineTests.cs
+│   ├── GameRulesTests.cs
+│   └── RepositoryTests.cs
+├── Helpers/
+│   ├── TestDataGenerator.cs
+│   ├── TestExtensions.cs
+│   └── TestConstants.cs
+└── SleepingQueens.Tests.csproj

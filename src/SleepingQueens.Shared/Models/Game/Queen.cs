@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using SleepingQueens.Shared.Models.Game.Enums;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SleepingQueens.Shared.Models.Game;
@@ -29,18 +30,4 @@ public class Queen
     [Required]
     public Guid GameId { get; set; }
     public virtual Game Game { get; set; } = null!;
-}
-
-public enum QueenType
-{
-    RoseQueen = 1,
-    CatQueen = 2,
-    DogQueen = 3,
-    PeacockQueen = 4,
-    RainbowQueen = 5,
-    MoonQueen = 6,
-    SunQueen = 7,
-    StarQueen = 8,
-    CakeQueen = 9,
-    HeartQueen = 10
 }

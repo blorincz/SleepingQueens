@@ -1,0 +1,531 @@
+﻿@page "/game/{GameCode}"
+@inherits AsyncComponentBase
+@using SleepingQueens.Client.Components
+@using SleepingQueens.Client.Services
+@using SleepingQueens.Shared.Models.DTOs
+@using SleepingQueens.Shared.Models.Game.Enums
+@inject ISignalRService SignalRService
+@inject IGameStateService GameStateService
+@inject NavigationManager Navigation
+
+<PageTitle>Game - @GameCode</PageTitle>
+
+@if (gameState == null)
+{
+    <div class="loading">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Loading game...</p>
+    </div>
+}
+else
+{
+    <div class="game-container">
+        <!-- Game Header -->
+        <div class="game-header">
+            <div class="game-info">
+                <h3>Game: @gameState.Game?.Code</h3>
+                <div class="game-phase">
+                    <span class="badge @GetPhaseBadgeClass()">@gameState.Game?.Phase</span>
+                </div>
+            </div>
+            <div class="turn-indicator">
+                @if (IsPlayerTurn)
+                {
+                    <div class="alert alert-success">
+                        <strong>Your Turn!</strong>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <strong>@gameState.CurrentPlayer?.Name's Turn</strong>
+                    </div>
+                }
+            </div>
+            <div class="score-info">
+                <div class="target-score">
+                    Target: @gameState.Game?.TargetScore points
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ReturnToLobby">
+                    Return to Lobby
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Game Area -->
+        <div class="game-board">
+            <!-- Opponents Area -->
+            <div class="opponents-area">
+                @foreach (var opponent in GetOpponents())
+                {
+                    <div class="opponent" @onclick="() => SelectPlayer(opponent.Id)">
+                        <div class="opponent-name">@opponent.Name</div>
+                        <div class="opponent-score">@opponent.Score points</div>
+
+                        <!-- Opponent's Queens -->
+                        <div class="opponent-queens">
+                            @foreach (var queen in opponent.Queens ?? Enumerable.Empty<QueenDto>())
+                            {
+                                var queenTitle = $"{queen.Name} ({queen.PointValue} pts)";
+                                <QueenDisplay Queen="queen"
+                                              IsAwake="true"
+                                              AdditionalClasses="queen-token"
+                                              Title="@queenTitle" />
+                            }
+                        </div>
+
+                        <!-- Opponent's Hand (facedown cards) -->
+                        <div class="opponent-hand">
+                            @for (int i = 0; i < opponent.Hand.Count; i++)
+                            {
+                                <CardDisplay IsFaceDown="true"
+                                             AdditionalClasses="opponent-card"
+                                             IsClickable="false" />
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Center Play Area -->
+            <div class="center-area">
+                <!-- Sleeping Queens -->
+                <div class="sleeping-queens">
+                    <h5>Sleeping Queens</h5>
+                    <div class="queens-grid">
+                        @foreach (var queen in gameState.SleepingQueens ?? Enumerable.Empty<QueenDto>())
+                        {
+                            var queenTitle = $"{queen.Name} ({queen.PointValue} pts)";
+                            <QueenDisplay Queen="queen"
+                                          IsSelected="selectedQueenId == queen.Id"
+                                          IsFaceDown="true"
+                                          OnQueenIdClick="() => SelectQueen(queen.Id)"
+                                          Title="@queenTitle"
+                                          IsClickable="@IsPlayerTurn" />
+                        }
+                    </div>
+                </div>
+
+                <!-- Deck and Discard -->
+                <div class="deck-area">
+                    <div class="deck" @onclick="DrawCard" title="Click to draw">
+                        <div class="deck-count">@gameState.CardsInDeck</div>
+                        <div>Deck</div>
+                    </div>
+                    <div class="discard" title="Discard Pile">
+                        <div class="discard-count">@gameState.DiscardPile.Count</div>
+                        <div>Discard</div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    @if (IsPlayerTurn)
+                    {
+                        <button class="btn btn-primary" @onclick="EndTurn"
+                                @disabled="@(selectedCards.Count == 0)">
+                            End Turn
+                        </button>
+                        <button class="btn btn-secondary" @onclick="DiscardSelected"
+                                @disabled="@(selectedCards.Count == 0)">
+                            Discard Selected
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Player Area -->
+            <div class="player-area">
+                <div class="player-info">
+                    <h4>@currentPlayerName</h4>
+                    <div class="player-score">Score: @currentPlayerScore</div>
+                </div>
+
+                <!-- Player's Hand -->
+                <div class="player-hand">
+                    <h5>Your Hand (@selectedCards.Count selected)</h5>
+                    <div class="cards-grid">
+                        @foreach (var card in currentPlayerHand)
+                        {
+                            var cardTitle = $"@card.Name - @card.Description";
+                            <CardDisplay Card="card"
+                                         IsSelected="selectedCards.Contains(card.Id)"
+                                         OnCardIdClick="() => ToggleCardSelection(card.Id)"
+                                         Title="@cardTitle"
+                                         IsClickable="@IsPlayerTurn" />
+                        }
+                    </div>
+                </div>
+
+                <!-- Player's Queens -->
+                <div class="player-queens">
+                    <h5>Your Queens</h5>
+                    <div class="queens-grid">
+                        @foreach (var queen in currentPlayerQueens)
+                        {
+                            var queenTitle = $"{queen.Name} ({queen.PointValue} pts)";
+                            <QueenDisplay Queen="queen"
+                                          IsAwake="true"
+                                          AdditionalClasses="queen-token"
+                                          Title="@queenTitle" />
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Section -->
+        <div class="game-chat">
+            <h5>Game Chat</h5>
+            <div class="chat-messages" @ref="chatMessagesContainer">
+                @foreach (var message in chatMessages)
+                {
+                    <div class="chat-message">
+                        <strong>@message.PlayerName:</strong> @message.Message
+                    </div>
+                }
+            </div>
+            <div class="chat-input">
+                <input type="text" class="form-control" @bind="chatMessage"
+                       placeholder="Type a message..." @onkeypress="HandleChatKeyPress" />
+                <button class="btn btn-primary" @onclick="SendChatMessage">Send</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string GameCode { get; set; } = string.Empty;
+
+    private GameStateDto? gameState;
+    private List<ChatMessageDisplay> chatMessages = new();
+    private string chatMessage = string.Empty;
+    private ElementReference chatMessagesContainer;
+    private List<Guid> selectedCards = new();
+    private Guid? selectedPlayerId;
+    private Guid? selectedQueenId;
+    private bool isPlayerTurn = false;
+
+    private string currentPlayerName = string.Empty;
+    private int currentPlayerScore = 0;
+    private List<CardDto> currentPlayerHand = new();
+    private List<QueenDto> currentPlayerQueens = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignalRService.ConnectAsync();
+        SetupEventSubscriptions();
+
+        await LoadGameState();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ScrollChatToBottom();
+        }
+    }
+
+    private void SetupEventSubscriptions()
+    {
+        // Subscribe to events using the Subscribe method
+        SignalRService.OnGameStateUpdated.Subscribe(HandleGameStateUpdatedAsync);
+        SignalRService.OnChatMessage.Subscribe(HandleChatMessageAsync);
+        SignalRService.OnConnectionStatusChanged.Subscribe(HandleConnectionStatusChangedAsync);
+        SignalRService.OnGameActionResponse.Subscribe(HandleGameActionResponseAsync);
+    }
+
+    public string lastErrorMessage { get; set; } = string.Empty;
+
+    private async Task LoadGameState()
+    {
+        if (GameStateService.CurrentGameId.HasValue)
+        {
+            var response = await SignalRService.GetGameStateAsync(GameStateService.CurrentGameId.Value);
+            if (response.Success && response.Data != null)
+            {
+                UpdateGameState(response.Data);
+            }
+        }
+    }
+
+    private void UpdateGameState(GameStateDto newState)
+    {
+        gameState = newState;
+        UpdatePlayerInfo();
+        StateHasChanged();
+    }
+
+    private void UpdatePlayerInfo()
+    {
+        if (gameState == null || !GameStateService.CurrentPlayerId.HasValue) return;
+
+        var player = gameState.Players?.FirstOrDefault(p => p.Id == GameStateService.CurrentPlayerId.Value);
+        if (player != null)
+        {
+            currentPlayerName = player.Name;
+            currentPlayerScore = player.Score;
+            currentPlayerHand = player.Hand?.ToList() ?? new List<CardDto>();
+            currentPlayerQueens = player.Queens?.ToList() ?? new List<QueenDto>();
+            isPlayerTurn = gameState.CurrentPlayer?.Id == GameStateService.CurrentPlayerId.Value;
+        }
+    }
+
+    private IEnumerable<PlayerDto> GetOpponents()
+    {
+        if (gameState?.Players == null || !GameStateService.CurrentPlayerId.HasValue)
+            return Enumerable.Empty<PlayerDto>();
+
+        return gameState.Players.Where(p => p.Id != GameStateService.CurrentPlayerId.Value);
+    }
+
+    private async Task HandleGameStateUpdatedAsync(GameStateDto newState)
+    {
+        await InvokeAsync(() =>
+        {
+            UpdateGameState(newState);
+            selectedCards.Clear();
+            selectedPlayerId = null;
+            selectedQueenId = null;
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleChatMessageAsync((string PlayerName, string Message) chatData)
+    {
+        await InvokeAsync(async () =>
+        {
+            chatMessages.Add(new ChatMessageDisplay
+            {
+                PlayerName = chatData.PlayerName,
+                Message = chatData.Message
+            });
+            StateHasChanged();
+            await ScrollChatToBottom();
+        });
+    }
+
+    private async Task HandleConnectionStatusChangedAsync(string status)
+    {
+        await InvokeAsync(() =>
+        {
+            // Update UI based on connection status
+            Console.WriteLine($"Connection status changed: {status}");
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleGameActionResponseAsync(ApiResponse response)
+    {
+        await InvokeAsync(() =>
+        {
+            // Handle game action responses
+            if (!response.Success && !string.IsNullOrEmpty(response.ErrorMessage))
+            {
+                // Show error to user
+                Console.WriteLine($"Game action failed: {response.ErrorMessage}");
+                // You could set an error message property to display in UI
+                lastErrorMessage = response.ErrorMessage;
+            }
+            StateHasChanged();
+        });
+    }
+
+    private bool IsPlayerTurn => GameStateService.IsPlayerTurn;
+
+    private async Task DrawCard()
+    {
+        if (!IsPlayerTurn || !GameStateService.CurrentGameId.HasValue) return;
+
+        var response = await SignalRService.DrawCardAsync(GameStateService.CurrentGameId.Value);
+        if (!response.Success)
+        {
+            // Show error
+            Console.WriteLine($"Failed to draw card: {response.ErrorMessage}");
+        }
+    }
+
+    private async Task EndTurn()
+    {
+        if (!IsPlayerTurn || !GameStateService.CurrentGameId.HasValue) return;
+
+        var response = await SignalRService.EndTurnAsync(GameStateService.CurrentGameId.Value);
+        if (!response.Success)
+        {
+            // Show error
+            Console.WriteLine($"Failed to end turn: {response.ErrorMessage}");
+        }
+    }
+
+    private void ToggleCardSelection(Guid cardId)
+    {
+        if (!IsPlayerTurn) return;
+
+        if (selectedCards.Contains(cardId))
+        {
+            selectedCards.Remove(cardId);
+        }
+        else
+        {
+            selectedCards.Add(cardId);
+        }
+        StateHasChanged();
+    }
+
+    private void SelectPlayer(Guid playerId)
+    {
+        if (!IsPlayerTurn) return;
+
+        selectedPlayerId = playerId;
+        selectedQueenId = null;
+        StateHasChanged();
+
+        // Check if we can play a card with this selection
+        CheckAndPlayCard();
+    }
+
+    private void SelectQueen(Guid queenId)
+    {
+        if (!IsPlayerTurn) return;
+
+        selectedQueenId = queenId;
+        selectedPlayerId = null;
+        StateHasChanged();
+
+        // Check if we can play a card with this selection
+        CheckAndPlayCard();
+    }
+
+    private async void CheckAndPlayCard()
+    {
+        if (selectedCards.Count == 1 && GameStateService.CurrentGameId.HasValue)
+        {
+            var cardId = selectedCards.First();
+            var request = new PlayCardRequest
+            {
+                GameId = GameStateService.CurrentGameId.Value,
+                CardId = cardId,
+                TargetPlayerId = selectedPlayerId,
+                TargetQueenId = selectedQueenId
+            };
+
+            var response = await SignalRService.PlayCardAsync(request);
+            if (!response.Success)
+            {
+                // Show error
+                Console.WriteLine($"Failed to play card: {response.ErrorMessage}");
+            }
+        }
+    }
+
+    private async Task DiscardSelected()
+    {
+        if (!IsPlayerTurn || selectedCards.Count == 0 || !GameStateService.CurrentGameId.HasValue) return;
+
+        // You'll need to implement discard functionality in your GameEngine
+        // For now, just clear selection
+        selectedCards.Clear();
+        StateHasChanged();
+    }
+
+    private async Task SendChatMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(chatMessage) && GameStateService.CurrentGameId.HasValue)
+        {
+            await SignalRService.SendMessageAsync(GameStateService.CurrentGameId.Value, chatMessage);
+            chatMessage = string.Empty;
+        }
+    }
+
+    private async Task HandleChatKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendChatMessage();
+        }
+    }
+
+    private void ReturnToLobby()
+    {
+        Navigation.NavigateTo($"/lobby/{GameCode}");
+    }
+
+    private async Task ScrollChatToBottom()
+    {
+        try
+        {
+            await chatMessagesContainer.FocusAsync();
+        }
+        catch
+        {
+            // Ignore focus errors
+        }
+    }
+
+    // Helper methods for UI
+    private string GetPhaseBadgeClass()
+    {
+        return gameState?.Game?.Phase switch
+        {
+            GamePhase.Setup => "bg-secondary",
+            GamePhase.Playing => "bg-success",
+            GamePhase.Scoring => "bg-warning",
+            GamePhase.Ended => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetCardClass(CardDto card)
+    {
+        var classes = new List<string> { "game-card" };
+
+        if (selectedCards.Contains(card.Id))
+            classes.Add("selected");
+
+        classes.Add($"card-{card.Type.ToString().ToLower()}");
+
+        return string.Join(" ", classes);
+    }
+
+    private string GetCardEmoji(CardType type)
+    {
+        return type switch
+        {
+            CardType.King => "👑",
+            CardType.Knight => "⚔️",
+            CardType.Dragon => "🐉",
+            CardType.SleepingPotion => "🧪",
+            CardType.Jester => "🃏",
+            CardType.Number => "🔢",
+            CardType.Queen => "👸",
+            _ => "🃏"
+        };
+    }
+
+    private string GetQueenEmoji(string queenType)
+    {
+        return queenType switch
+        {
+            "Rose Queen" => "🌹",
+            "Cat Queen" => "🐱",
+            "Dog Queen" => "🐶",
+            "Peacock Queen" => "🦚",
+            "Rainbow Queen" => "🌈",
+            "Moon Queen" => "🌙",
+            "Sun Queen" => "☀️",
+            "Star Queen" => "⭐",
+            "Cake Queen" => "🍰",
+            "Heart Queen" => "❤️",
+            _ => "👑"
+        };
+    }
+
+    private class ChatMessageDisplay
+    {
+        public string PlayerName { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+    }
+}

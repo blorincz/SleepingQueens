@@ -1,0 +1,214 @@
+﻿@page "/"
+@using SleepingQueens.Client.Services
+@using SleepingQueens.Shared.Models.DTOs
+@using SleepingQueens.Shared.Models.Game
+@inject ISignalRService SignalRService
+@inject NavigationManager Navigation
+@inject IGameStateService GameStateService
+
+<PageTitle>Sleeping Queens</PageTitle>
+
+<div class="home-container">
+    <div class="hero-section">
+        <h1 class="display-4">Sleeping Queens</h1>
+        <p class="lead">A magical card game of queens, knights, and strategy!</p>
+    </div>
+    
+    <div class="action-buttons">
+        <button class="btn btn-primary btn-lg" @onclick="CreateNewGame">
+            Create New Game
+        </button>
+        <button class="btn btn-secondary btn-lg" @onclick="JoinExistingGame">
+            Join Existing Game
+        </button>
+        <button class="btn btn-outline-secondary btn-lg" @onclick="ViewRules">
+            How to Play
+        </button>
+    </div>
+    
+    @if (showCreateModal)
+    {
+        <div class="modal-backdrop show"></div>
+        <div class="modal show d-block" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create New Game</h5>
+                        <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="playerName" class="form-label">Your Name</label>
+                            <input type="text" class="form-control" id="playerName" 
+                                   @bind="playerName" placeholder="Enter your name" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="maxPlayers" class="form-label">Max Players</label>
+                            <input type="number" class="form-control" id="maxPlayers" 
+                                   @bind="maxPlayers" min="2" max="6" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="targetScore" class="form-label">Target Score</label>
+                            <input type="number" class="form-control" id="targetScore" 
+                                   @bind="targetScore" min="10" max="100" />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="SubmitCreateGame" 
+                                @disabled="@(string.IsNullOrWhiteSpace(playerName))">
+                            Create Game
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    
+    @if (showJoinModal)
+    {
+        <div class="modal-backdrop show"></div>
+        <div class="modal show d-block" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Join Existing Game</h5>
+                        <button type="button" class="btn-close" @onclick="CloseJoinModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="joinPlayerName" class="form-label">Your Name</label>
+                            <input type="text" class="form-control" id="joinPlayerName" 
+                                   @bind="joinPlayerName" placeholder="Enter your name" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="gameCode" class="form-label">Game Code</label>
+                            <input type="text" class="form-control" id="gameCode" 
+                                   @bind="gameCode" placeholder="Enter 6-digit game code" 
+                                   maxlength="6" style="text-transform:uppercase" />
+                        </div>
+                        @if (!string.IsNullOrEmpty(joinErrorMessage))
+                        {
+                            <div class="alert alert-danger">@joinErrorMessage</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseJoinModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="SubmitJoinGame" 
+                                @disabled="@(string.IsNullOrWhiteSpace(joinPlayerName) || string.IsNullOrWhiteSpace(gameCode))">
+                            Join Game
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool showCreateModal = false;
+    private bool showJoinModal = false;
+    private string playerName = string.Empty;
+    private string joinPlayerName = string.Empty;
+    private string gameCode = string.Empty;
+    private string joinErrorMessage = string.Empty;
+    private int maxPlayers = 4;
+    private int targetScore = 40;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await SignalRService.ConnectAsync();
+    }
+    
+    private void CreateNewGame()
+    {
+        showCreateModal = true;
+    }
+    
+    private void JoinExistingGame()
+    {
+        showJoinModal = true;
+    }
+    
+    private void ViewRules()
+    {
+        Navigation.NavigateTo("/rules");
+    }
+    
+    private void CloseCreateModal()
+    {
+        showCreateModal = false;
+        playerName = string.Empty;
+    }
+    
+    private void CloseJoinModal()
+    {
+        showJoinModal = false;
+        joinPlayerName = string.Empty;
+        gameCode = string.Empty;
+        joinErrorMessage = string.Empty;
+    }
+    
+    private async Task SubmitCreateGame()
+    {
+        try
+        {
+            var request = new CreateGameRequest
+            {
+                PlayerName = playerName,
+                Settings = new GameSettings
+                {
+                    MaxPlayers = maxPlayers,
+                    TargetScore = targetScore
+                }
+            };
+            
+            var response = await SignalRService.CreateGameAsync(request);
+            
+            if (response.Success && response.Data != null)
+            {
+                GameStateService.SetPlayerId(response.Data.PlayerId);
+                GameStateService.SetGameId(response.Data.GameId);
+                Navigation.NavigateTo($"/lobby/{response.Data.GameCode}");
+            }
+            else
+            {
+                // Show error
+                joinErrorMessage = response.ErrorMessage ?? "Failed to create game";
+            }
+        }
+        catch (Exception ex)
+        {
+            joinErrorMessage = $"Error: {ex.Message}";
+        }
+    }
+    
+    private async Task SubmitJoinGame()
+    {
+        try
+        {
+            var request = new JoinGameRequest
+            {
+                PlayerName = joinPlayerName,
+                GameCode = gameCode.ToUpperInvariant()
+            };
+            
+            var response = await SignalRService.JoinGameAsync(request);
+            
+            if (response.Success && response.Data != null)
+            {
+                GameStateService.SetPlayerId(response.Data.PlayerId);
+                GameStateService.SetGameId(response.Data.GameId);
+                Navigation.NavigateTo($"/lobby/{gameCode.ToUpperInvariant()}");
+            }
+            else
+            {
+                joinErrorMessage = response.ErrorMessage ?? "Failed to join game";
+            }
+        }
+        catch (Exception ex)
+        {
+            joinErrorMessage = $"Error: {ex.Message}";
+        }
+    }
+}

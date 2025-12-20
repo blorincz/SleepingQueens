@@ -142,6 +142,88 @@ public class GameHub(
         }
     }
 
+    public async Task<ApiResponse> AddAIPlayer(Guid gameId, AILevel level)
+    {
+        try
+        {
+            var playerId = GetPlayerId();
+            var game = await _gameRepository.GetByIdAsync(gameId);
+
+            if (game == null)
+                return ApiResponse.ErrorResponse("Game not found");
+
+            // Check if player is host (first player)
+            var host = game.Players.OrderBy(p => p.JoinedAt).FirstOrDefault();
+            if (host?.Id != playerId)
+                return ApiResponse.ErrorResponse("Only the host can add AI players");
+
+            if (game.IsFull())
+                return ApiResponse.ErrorResponse("Game is full");
+
+            // Add AI player
+            var aiPlayer = await _gameEngine.AddAIPlayerAsync(gameId, level);
+
+            // Notify all players
+            await Clients.Group(gameId.ToString())
+                .SendAsync("PlayerJoined", new PlayerJoinedEvent
+                {
+                    PlayerId = aiPlayer.Id,
+                    PlayerName = aiPlayer.Name,
+                    TotalPlayers = game.Players.Count
+                });
+
+            return ApiResponse.SuccessResponse();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding AI player");
+            return ApiResponse.ErrorResponse(ex.Message);
+        }
+    }
+
+    public async Task<ApiResponse> RemovePlayer(Guid gameId, Guid playerId)
+    {
+        try
+        {
+            var currentPlayerId = GetPlayerId();
+            var game = await _gameRepository.GetByIdAsync(gameId);
+
+            if (game == null)
+                return ApiResponse.ErrorResponse("Game not found");
+
+            // Check if current player is host
+            var host = game.Players.OrderBy(p => p.JoinedAt).FirstOrDefault();
+            if (host?.Id != currentPlayerId)
+                return ApiResponse.ErrorResponse("Only the host can remove players");
+
+            var playerToRemove = game.Players.FirstOrDefault(p => p.Id == playerId);
+            if (playerToRemove == null)
+                return ApiResponse.ErrorResponse("Player not found");
+
+            // Can't remove host
+            if (playerToRemove.Id == host.Id)
+                return ApiResponse.ErrorResponse("Cannot remove the host");
+
+            // Remove the player
+            await _gameEngine.RemovePlayerAsync(gameId, playerId);
+
+            // Notify all players
+            await Clients.Group(gameId.ToString())
+                .SendAsync("PlayerLeft", new PlayerLeftEvent
+                {
+                    PlayerId = playerId,
+                    PlayerName = playerToRemove.Name
+                });
+
+            return ApiResponse.SuccessResponse();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing player");
+            return ApiResponse.ErrorResponse(ex.Message);
+        }
+    }
+
     public async Task<StartGameResponse> StartGame(Guid gameId)
     {
         try
@@ -155,6 +237,11 @@ public class GameHub(
             // Check if player is in this game
             if (!game.Players.Any(p => p.Id == playerId))
                 return new StartGameResponse { Success = false, ErrorMessage = "Not in game" };
+
+            // Check if player is host (first player)
+            var host = game.Players.OrderBy(p => p.JoinedAt).FirstOrDefault();
+            if (host?.Id != playerId)
+                return new StartGameResponse { Success = false, ErrorMessage = "Only the host can start the game" };
 
             // Start the game
             var startedGame = await _gameEngine.StartGameAsync(gameId);

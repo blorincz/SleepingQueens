@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <TestRunParameters>
+    <Parameter name="BaseUrl" value="https://localhost:5001" />
+    <Parameter name="DatabaseConnectionString" 
+               value="Server=(localdb)\\mssqllocaldb;Database=SleepingQueensTest;Trusted_Connection=True;" />
+  </TestRunParameters>
+  <LoggerRunSettings>
+    <Loggers>
+      <Logger friendlyName="trx" />
+    </Loggers>
+  </LoggerRunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="blame" />
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

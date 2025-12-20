@@ -1,5 +1,8 @@
-﻿namespace SleepingQueens.Shared.Models.Game.Enums;
+﻿using System.Text.Json.Serialization;
 
+namespace SleepingQueens.Shared.Models.Game.Enums;
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum GameStatus
 {
     Waiting = 1,     // Game created, waiting for players
