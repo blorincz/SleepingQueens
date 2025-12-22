@@ -231,8 +231,6 @@ public class SignalRService : ISignalRService
         };
     }
 
-    // SleepingQueens.Client/Services/SignalRService.cs (corrected ExecuteHubMethodAsync calls)
-
     #region Game Management
 
     public async Task<ApiResponse<CreateGameResult>> CreateGameAsync(CreateGameRequest request)

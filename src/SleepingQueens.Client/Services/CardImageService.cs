@@ -1,5 +1,4 @@
-﻿// SleepingQueens.Client/Services/CardImageService.cs
-using SleepingQueens.Shared.Models.DTOs;
+﻿using SleepingQueens.Shared.Models.DTOs;
 using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Client.Services;
@@ -58,8 +57,8 @@ public class CardImageService : ICardImageService
         return pointValue switch
         {
             20 => "/images/queens/heart.png",
-            15 => "/images/queens/cake.png",
-            10 => "/images/queens/star.png",
+            15 => "/images/queens/pancake.png",
+            10 => "/images/queens/starfish.png",
             _ => "/images/queens/rose.png"
         };
     }

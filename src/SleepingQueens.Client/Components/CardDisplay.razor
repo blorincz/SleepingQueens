@@ -1,6 +1,6 @@
-﻿@using SleepingQueens.Client.Services
-@using SleepingQueens.Shared.Models.DTOs
+﻿@using SleepingQueens.Shared.Models.DTOs
 @using SleepingQueens.Shared.Models.Game.Enums
+
 
 <div class="card @AdditionalClasses"
      style="@CardStyle"
@@ -54,12 +54,12 @@
                 return $"background-image: url('/images/cards/back.png');";
             }
 
-            if (Card != null && !string.IsNullOrEmpty(Card.ImagePath))
+            if (Card != null)
             {
-                return $"background-image: url('{Card.ImagePath}');";
+                var imagePath = Card.ImagePath;
+                return $"background-image: url('{imagePath}');";
             }
 
-            // Fallback styling based on card type
             return GetFallbackStyle();
         }
     }

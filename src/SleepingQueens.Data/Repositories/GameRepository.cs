@@ -14,8 +14,17 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
     public async Task<Game?> GetByCodeAsync(string code)
     {
         return await _context.Games
+            .Include(g => g.Players)
             .FirstOrDefaultAsync(g => g.Code == code);
     }
+
+    public override async Task<Game?> GetByIdAsync(Guid Id)
+    {
+        return await _context.Games
+            .Include(g => g.Players)
+            .FirstOrDefaultAsync(g => g.Id == Id);
+    }
+
 
     public async Task<IEnumerable<Game>> GetActiveGamesAsync()
     {

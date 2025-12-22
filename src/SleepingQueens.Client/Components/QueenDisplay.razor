@@ -1,6 +1,6 @@
-﻿@using SleepingQueens.Client.Services
+﻿@* QueenDisplay.razor *@
 @using SleepingQueens.Shared.Models.DTOs
-@inject ICardImageService CardImageService
+
 <div class="queen-display @(IsAwake ? "awake" : "asleep") @(IsSelected ? "selected" : "") @AdditionalClasses"
      style="@QueenStyle"
      @onclick="HandleClick"
@@ -15,6 +15,7 @@
 </div>
 
 @code {
+
     [Parameter]
     public QueenDto? Queen { get; set; }
 

@@ -1,4 +1,90 @@
-/* ... keep all your :root and page styles ... */
+/* ========== PAGE LAYOUT ========== */
+/* Ensure page takes full viewport */
+.page {
+    position: relative;
+    min-height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+/* ========== HOME PAGE BACKGROUND LAYOUT ========== */
+.home-container {
+    position: relative;
+    width: 90vw; /* 90% of viewport width */
+    height: 90vh; /* 90% of viewport height */
+    margin: 1vh auto; /* Centers the container vertically and horizontally */
+    background-image: url('/images/title.png');
+    background-size: contain; /* Show whole image */
+    background-position: center;
+    background-repeat: no-repeat;
+    display: flex;
+    justify-content: center; /* Center horizontally */
+    align-items: center; /* Center vertically */
+}
+
+/* Hero section - centered semi-transparent container */
+.hero-section {
+    text-align: center;
+    padding: 2rem 3rem;
+    background: rgba(255, 255, 255, 0.6); /* More opaque for better readability */
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px); /* Add blur for glass effect */
+    max-width: 600px;
+    width: 100%;
+    margin-bottom: 40px;
+    visibility:hidden;
+}
+
+/* Action buttons fixed to lower left */
+.action-buttons {
+    position: absolute; /* Absolute within home-container */
+    bottom: 20px;
+    left: 50%; /* Center horizontally */
+    transform: translateX(-50%); /* Offset by half width */
+    display: flex;
+    flex-direction: row;
+    gap: 25px;
+    z-index: 1000;
+    width: 600px; /* Same max-width as hero-section */
+    max-width: 100%; /* Responsive */
+    justify-content: center; /* Align buttons to left */
+    box-sizing: border-box;
+}
+
+    .action-buttons button {
+        padding: 12px 24px;
+        font-size: 1.1rem;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        flex-shrink: 0; /* Prevent buttons from shrinking */
+    }
+
+        .action-buttons button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+    /* Button colors */
+    .action-buttons .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+    }
+
+    .action-buttons .btn-secondary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+    }
+
+    .action-buttons .btn-outline-light {
+        background: transparent;
+        border: 2px solid white;
+        color: white;
+    }
+
+        .action-buttons .btn-outline-light:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
 
 /* ========== CARD DISPLAY COMPONENT ========== */
 .card {

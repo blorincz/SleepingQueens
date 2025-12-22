@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using SleepingQueens.Data;
 using SleepingQueens.Data.Repositories;
