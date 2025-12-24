@@ -1,12 +1,10 @@
 ﻿@page "/lobby/{GameCode}"
-@inherits AsyncComponentBase
 @using Microsoft.AspNetCore.SignalR
 @using SleepingQueens.Client.Components
 @using SleepingQueens.Client.Services
 @using SleepingQueens.Shared.Models.DTOs
 @using SleepingQueens.Shared.Models.Game.Enums
 @inject ISignalRService SignalRService
-@inject IGameStateService GameStateService
 @inject NavigationManager Navigation
 
 <PageTitle>Game Lobby - @GameCode</PageTitle>
@@ -135,6 +133,12 @@
 @code {
     [Parameter] public string GameCode { get; set; } = string.Empty;
 
+    [SupplyParameterFromQuery(Name = "playerId")]
+    public Guid? PlayerId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "gameId")]
+    public Guid? GameId { get; set; }
+
     private List<PlayerDto> players = new();
     private List<ChatMessageDisplay> chatMessages = new();
     private List<PlayerInfo> aiPlayers = new();
@@ -144,7 +148,6 @@
     private int currentPlayerCount = 0;
     private int maxPlayers = 4;
     private int targetScore = 40;
-    private Guid? gameId;
     private CancellationTokenSource _cts = new CancellationTokenSource();
     public string lastErrorMessage { get; set; } = string.Empty;
     private string connectionStatus = "Disconnected";
@@ -152,17 +155,13 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await ExecuteSafeAsync(async () =>
-        {
-            await SignalRService.ConnectAsync();
-            SetupEventSubscriptions();
+        await SignalRService.ConnectAsync();
+        SetupEventSubscriptions();
 
-            if (GameStateService.CurrentGameId.HasValue)
-            {
-                gameId = GameStateService.CurrentGameId.Value;
-                await LoadGameState();
-            }
-        }, OnError);
+        if (GameId.HasValue)
+        {
+            await LoadGameState();
+        }
     }
 
     private void OnError(Exception ex)
@@ -206,10 +205,9 @@
 
     private async Task LoadGameState()
     {
-        if (GameStateService.CurrentGameId.HasValue)
+        if (GameId.HasValue)
         {
-            gameId = GameStateService.CurrentGameId.Value;
-            var response = await SignalRService.GetGameStateAsync(gameId.Value);
+            var response = await SignalRService.GetGameStateAsync(GameId.Value);
 
             if (response.Success && response.Data != null)
             {
@@ -226,9 +224,9 @@
             currentPlayerCount = players.Count;
 
             // Check if current player is host (first player)
-            if (GameStateService.CurrentPlayerId.HasValue)
+            if (PlayerId.HasValue)
             {
-                isHost = players.Any() && players[0].Id == GameStateService.CurrentPlayerId.Value;
+                isHost = players.Any() && players[0].Id == PlayerId.Value;
             }
         }
 
@@ -285,7 +283,8 @@
     {
         await InvokeAsync(() =>
         {
-            Navigation.NavigateTo($"/game/{GameCode}");
+            Navigation.NavigateTo($"/game/{GameCode}" +
+            $"?playerId={PlayerId}");
         });
     }
 
@@ -328,56 +327,47 @@
 
     private async Task StartGame()
     {
-        if (!gameId.HasValue || !isHost) return;
+        if (!GameId.HasValue || !isHost) return;
 
-        await ExecuteSafeAsync(async () =>
+        var response = await SignalRService.StartGameAsync(GameId.Value);
+        if (!response.Success)
         {
-            var response = await SignalRService.StartGameAsync(gameId.Value);
-            if (!response.Success)
-            {
-                // Show error message
-                await ShowToast("Error", $"Failed to start game: {response.ErrorMessage}", "danger");
-            }
-        }, OnError);
+            // Show error message
+            await ShowToast("Error", $"Failed to start game: {response.ErrorMessage}", "danger");
+        }
     }
 
     private async Task AddAIPlayer()
     {
-        if (!gameId.HasValue || !isHost || currentPlayerCount >= maxPlayers) return;
+        if (!GameId.HasValue || !isHost || currentPlayerCount >= maxPlayers) return;
 
-        await ExecuteSafeAsync(async () =>
+        var level = Enum.Parse<AILevel>(selectedAILevel);
+        var response = await SignalRService.AddAIPlayerAsync(GameId.Value, level);
+
+        if (response.Success)
         {
-            var level = Enum.Parse<AILevel>(selectedAILevel);
-            var response = await SignalRService.AddAIPlayerAsync(gameId.Value, level);
-
-            if (response.Success)
-            {
-                await ShowToast("Success", $"Added AI player ({selectedAILevel})", "success");
-            }
-            else
-            {
-                await ShowToast("Error", $"Failed to add AI: {response.ErrorMessage}", "danger");
-            }
-        }, OnError);
+            await ShowToast("Success", $"Added AI player ({selectedAILevel})", "success");
+        }
+        else
+        {
+            await ShowToast("Error", $"Failed to add AI: {response.ErrorMessage}", "danger");
+        }
     }
 
     private async Task RemovePlayer(Guid playerId)
     {
-        if (!gameId.HasValue || !isHost) return;
+        if (!GameId.HasValue || !isHost) return;
 
-        await ExecuteSafeAsync(async () =>
+        var response = await SignalRService.RemovePlayerAsync(GameId.Value, playerId);
+
+        if (response.Success)
         {
-            var response = await SignalRService.RemovePlayerAsync(gameId.Value, playerId);
-
-            if (response.Success)
-            {
-                await ShowToast("Success", "Player removed", "success");
-            }
-            else
-            {
-                await ShowToast("Error", $"Failed to remove player: {response.ErrorMessage}", "danger");
-            }
-        }, OnError);
+            await ShowToast("Success", "Player removed", "success");
+        }
+        else
+        {
+            await ShowToast("Error", $"Failed to remove player: {response.ErrorMessage}", "danger");
+        }
     }
 
     private async Task ShowToast(string title, string message, string type)
@@ -398,9 +388,9 @@
 
     private async Task SendChatMessage()
     {
-        if (!string.IsNullOrWhiteSpace(chatMessage) && gameId.HasValue)
+        if (!string.IsNullOrWhiteSpace(chatMessage) && GameId.HasValue)
         {
-            await SignalRService.SendMessageAsync(gameId.Value, chatMessage);
+            await SignalRService.SendMessageAsync(GameId.Value, chatMessage);
             chatMessage = string.Empty;
         }
     }

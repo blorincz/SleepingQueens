@@ -20,7 +20,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Add SignalR
-builder.Services.AddSignalR(options =>
+builder.Services.AddSignalR().AddHubOptions<GameHub>(options =>
 {
     options.EnableDetailedErrors = true;
     options.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
@@ -60,14 +60,17 @@ builder.Services.AddLogging();
 //        new[] { "application/octet-stream" });
 //});
 
+// Get the client URL from configuration
+var clientUrl = builder.Configuration["ClientUrl"] ?? "https://localhost:5003";
+
 // Add CORS if you need it for development
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
-        builder => builder
-            .AllowAnyOrigin()
+        builder => builder.WithOrigins(clientUrl)
             .AllowAnyMethod()
-            .AllowAnyHeader());
+            .AllowAnyHeader()
+            .AllowCredentials());
 });
 
 var app = builder.Build();
@@ -99,8 +102,8 @@ app.UseAuthorization();
 app.MapControllers();
 
 // Map SignalR hub
-app.MapHub<GameHub>("/gamehub");
-app.MapFallbackToFile("index.html"); // IMPORTANT: Fallback for client routes
+app.MapHub<GameHub>("/gamehub").RequireCors("AllowAll"); ;
+//app.MapFallbackToFile("index.html"); // IMPORTANT: Fallback for client routes
 
 app.Run();
 

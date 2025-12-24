@@ -4,7 +4,6 @@
 @using SleepingQueens.Shared.Models.Game
 @inject ISignalRService SignalRService
 @inject NavigationManager Navigation
-@inject IGameStateService GameStateService
 
 <PageTitle>Sleeping Queens</PageTitle>
 
@@ -169,9 +168,9 @@
             
             if (response.Success && response.Data != null)
             {
-                GameStateService.SetPlayerId(response.Data.PlayerId);
-                GameStateService.SetGameId(response.Data.GameId);
-                Navigation.NavigateTo($"/lobby/{response.Data.GameCode}");
+                Navigation.NavigateTo($"/lobby/{response.Data.GameCode}" +
+                   $"?playerId={response.Data.PlayerId}" +
+                   $"&gameId={response.Data.GameId}");
             }
             else
             {
@@ -199,9 +198,9 @@
             
             if (response.Success && response.Data != null)
             {
-                GameStateService.SetPlayerId(response.Data.PlayerId);
-                GameStateService.SetGameId(response.Data.GameId);
-                Navigation.NavigateTo($"/lobby/{gameCode.ToUpperInvariant()}");
+                Navigation.NavigateTo($"/lobby/{gameCode.ToUpperInvariant()}" +
+                    $"?playerId={response.Data.PlayerId}" +
+                    $"&gameId={response.Data.GameId}");
             }
             else
             {

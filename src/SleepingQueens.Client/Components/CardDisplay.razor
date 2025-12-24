@@ -9,16 +9,7 @@
     @if (!IsFaceDown)
     {
         <div class="card-content">
-            <div class="card-header">
-                @CardIcon
-            </div>
-            <div class="card-body">
-                <div class="card-name">@Card?.Name</div>
-                @if (Card?.Type == CardType.Number)
-                {
-                    <div class="card-value">@Card?.Value</div>
-                }
-            </div>
+            
         </div>
     }
 </div>

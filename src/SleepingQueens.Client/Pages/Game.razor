@@ -4,8 +4,8 @@
 @using SleepingQueens.Client.Services
 @using SleepingQueens.Shared.Models.DTOs
 @using SleepingQueens.Shared.Models.Game.Enums
+@using System.Diagnostics
 @inject ISignalRService SignalRService
-@inject IGameStateService GameStateService
 @inject NavigationManager Navigation
 
 <PageTitle>Game - @GameCode</PageTitle>
@@ -31,7 +31,7 @@ else
                 </div>
             </div>
             <div class="turn-indicator">
-                @if (IsPlayerTurn)
+                @if (isPlayerTurn)
                 {
                     <div class="alert alert-success">
                         <strong>Your Turn!</strong>
@@ -71,8 +71,7 @@ else
                                 var queenTitle = $"{queen.Name} ({queen.PointValue} pts)";
                                 <QueenDisplay Queen="queen"
                                               IsAwake="true"
-                                              AdditionalClasses="queen-token"
-                                              Title="@queenTitle" />
+                                              AdditionalClasses="queen-token"/>
                             }
                         </div>
 
@@ -97,13 +96,11 @@ else
                     <div class="queens-grid">
                         @foreach (var queen in gameState.SleepingQueens ?? Enumerable.Empty<QueenDto>())
                         {
-                            var queenTitle = $"{queen.Name} ({queen.PointValue} pts)";
                             <QueenDisplay Queen="queen"
                                           IsSelected="selectedQueenId == queen.Id"
                                           IsFaceDown="true"
                                           OnQueenIdClick="() => SelectQueen(queen.Id)"
-                                          Title="@queenTitle"
-                                          IsClickable="@IsPlayerTurn" />
+                                          IsClickable="@isPlayerTurn" />
                         }
                     </div>
                 </div>
@@ -122,7 +119,7 @@ else
 
                 <!-- Action Buttons -->
                 <div class="action-buttons">
-                    @if (IsPlayerTurn)
+                    @if (isPlayerTurn)
                     {
                         <button class="btn btn-primary" @onclick="EndTurn"
                                 @disabled="@(selectedCards.Count == 0)">
@@ -149,12 +146,10 @@ else
                     <div class="cards-grid">
                         @foreach (var card in currentPlayerHand)
                         {
-                            var cardTitle = $"@card.Name - @card.Description";
                             <CardDisplay Card="card"
                                          IsSelected="selectedCards.Contains(card.Id)"
                                          OnCardIdClick="() => ToggleCardSelection(card.Id)"
-                                         Title="@cardTitle"
-                                         IsClickable="@IsPlayerTurn" />
+                                         IsClickable="@isPlayerTurn" />
                         }
                     </div>
                 </div>
@@ -199,6 +194,9 @@ else
 @code {
     [Parameter] public string GameCode { get; set; } = string.Empty;
 
+    [SupplyParameterFromQuery(Name = "playerId")]
+    public Guid? PlayerId { get; set; }
+
     private GameStateDto? gameState;
     private List<ChatMessageDisplay> chatMessages = new();
     private string chatMessage = string.Empty;
@@ -207,6 +205,8 @@ else
     private Guid? selectedPlayerId;
     private Guid? selectedQueenId;
     private bool isPlayerTurn = false;
+    private Guid? _currentPlayerId;
+    private Guid? _currentGameId;
 
     private string currentPlayerName = string.Empty;
     private int currentPlayerScore = 0;
@@ -242,14 +242,29 @@ else
 
     private async Task LoadGameState()
     {
-        if (GameStateService.CurrentGameId.HasValue)
+        if (PlayerId.HasValue)
         {
-            var response = await SignalRService.GetGameStateAsync(GameStateService.CurrentGameId.Value);
+            _currentPlayerId = PlayerId;
+        }
+        var _currentGameId = await GetGameIdFromCode(GameCode);
+        if (_currentGameId.HasValue)
+        {
+            var response = await SignalRService.GetGameStateAsync(_currentGameId.Value);
             if (response.Success && response.Data != null)
             {
                 UpdateGameState(response.Data);
             }
         }
+    }
+
+    private async Task<Guid?> GetGameIdFromCode(string gameCode)
+    {
+        var response = await SignalRService.GetActiveGamesAsync();
+        if (response.Success && response.Data != null)
+        {
+            return response.Data.FirstOrDefault(g => g.GameCode == gameCode)?.GameId;
+        }
+        return null;
     }
 
     private void UpdateGameState(GameStateDto newState)
@@ -261,25 +276,25 @@ else
 
     private void UpdatePlayerInfo()
     {
-        if (gameState == null || !GameStateService.CurrentPlayerId.HasValue) return;
+        if (gameState == null || !_currentPlayerId.HasValue) return;
 
-        var player = gameState.Players?.FirstOrDefault(p => p.Id == GameStateService.CurrentPlayerId.Value);
+        var player = gameState.Players?.FirstOrDefault(p => p.Id == _currentPlayerId.Value);
         if (player != null)
         {
             currentPlayerName = player.Name;
             currentPlayerScore = player.Score;
             currentPlayerHand = player.Hand?.ToList() ?? new List<CardDto>();
             currentPlayerQueens = player.Queens?.ToList() ?? new List<QueenDto>();
-            isPlayerTurn = gameState.CurrentPlayer?.Id == GameStateService.CurrentPlayerId.Value;
+            isPlayerTurn = gameState.CurrentPlayer?.Id == _currentPlayerId.Value;
         }
     }
 
     private IEnumerable<PlayerDto> GetOpponents()
     {
-        if (gameState?.Players == null || !GameStateService.CurrentPlayerId.HasValue)
+        if (gameState?.Players == null || !_currentPlayerId.HasValue)
             return Enumerable.Empty<PlayerDto>();
 
-        return gameState.Players.Where(p => p.Id != GameStateService.CurrentPlayerId.Value);
+        return gameState.Players.Where(p => p.Id != _currentPlayerId.Value);
     }
 
     private async Task HandleGameStateUpdatedAsync(GameStateDto newState)
@@ -334,13 +349,11 @@ else
         });
     }
 
-    private bool IsPlayerTurn => GameStateService.IsPlayerTurn;
-
     private async Task DrawCard()
     {
-        if (!IsPlayerTurn || !GameStateService.CurrentGameId.HasValue) return;
+        if (!isPlayerTurn || !_currentGameId.HasValue) return;
 
-        var response = await SignalRService.DrawCardAsync(GameStateService.CurrentGameId.Value);
+        var response = await SignalRService.DrawCardAsync(_currentGameId.Value);
         if (!response.Success)
         {
             // Show error
@@ -350,9 +363,9 @@ else
 
     private async Task EndTurn()
     {
-        if (!IsPlayerTurn || !GameStateService.CurrentGameId.HasValue) return;
+        if (!isPlayerTurn || !_currentGameId.HasValue) return;
 
-        var response = await SignalRService.EndTurnAsync(GameStateService.CurrentGameId.Value);
+        var response = await SignalRService.EndTurnAsync(_currentGameId.Value);
         if (!response.Success)
         {
             // Show error
@@ -362,7 +375,7 @@ else
 
     private void ToggleCardSelection(Guid cardId)
     {
-        if (!IsPlayerTurn) return;
+        if (!isPlayerTurn) return;
 
         if (selectedCards.Contains(cardId))
         {
@@ -377,7 +390,7 @@ else
 
     private void SelectPlayer(Guid playerId)
     {
-        if (!IsPlayerTurn) return;
+        if (!isPlayerTurn) return;
 
         selectedPlayerId = playerId;
         selectedQueenId = null;
@@ -389,7 +402,7 @@ else
 
     private void SelectQueen(Guid queenId)
     {
-        if (!IsPlayerTurn) return;
+        if (!isPlayerTurn) return;
 
         selectedQueenId = queenId;
         selectedPlayerId = null;
@@ -401,12 +414,12 @@ else
 
     private async void CheckAndPlayCard()
     {
-        if (selectedCards.Count == 1 && GameStateService.CurrentGameId.HasValue)
+        if (selectedCards.Count == 1 && _currentGameId.HasValue)
         {
             var cardId = selectedCards.First();
             var request = new PlayCardRequest
             {
-                GameId = GameStateService.CurrentGameId.Value,
+                GameId = _currentGameId.Value,
                 CardId = cardId,
                 TargetPlayerId = selectedPlayerId,
                 TargetQueenId = selectedQueenId
@@ -423,7 +436,7 @@ else
 
     private async Task DiscardSelected()
     {
-        if (!IsPlayerTurn || selectedCards.Count == 0 || !GameStateService.CurrentGameId.HasValue) return;
+        if (!isPlayerTurn || selectedCards.Count == 0 || !_currentGameId.HasValue) return;
 
         // You'll need to implement discard functionality in your GameEngine
         // For now, just clear selection
@@ -433,9 +446,9 @@ else
 
     private async Task SendChatMessage()
     {
-        if (!string.IsNullOrWhiteSpace(chatMessage) && GameStateService.CurrentGameId.HasValue)
+        if (!string.IsNullOrWhiteSpace(chatMessage) && _currentGameId.HasValue)
         {
-            await SignalRService.SendMessageAsync(GameStateService.CurrentGameId.Value, chatMessage);
+            await SignalRService.SendMessageAsync(_currentGameId.Value, chatMessage);
             chatMessage = string.Empty;
         }
     }

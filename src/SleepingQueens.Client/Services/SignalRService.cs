@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using SleepingQueens.Client.Events;
 using SleepingQueens.Shared.Models.DTOs;
-using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 using System.Text.Json;
 
@@ -55,6 +54,7 @@ public class SignalRService : ISignalRService
     private HubConnection? _hubConnection;
     private readonly NavigationManager _navigationManager;
     private readonly ILogger<SignalRService> _logger;
+    private readonly IConfiguration _configuration;
     private bool _isDisposed;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
 
@@ -73,9 +73,11 @@ public class SignalRService : ISignalRService
 
     public SignalRService(
         NavigationManager navigationManager,
+        IConfiguration configuration,
         ILogger<SignalRService> logger)
     {
         _navigationManager = navigationManager;
+        _configuration = configuration;
         _logger = logger;
 
         // Initialize async events with logging
@@ -109,9 +111,12 @@ public class SignalRService : ISignalRService
                 _hubConnection = null;
             }
 
+            // Get base URL from config or fallback to navigation manager
+            var baseUrl = _configuration["ApiBaseUrl"] ?? _navigationManager.BaseUri;
+
             // Build new connection
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl($"{_navigationManager.BaseUri}gamehub") // This will now be correct
+                .WithUrl($"{baseUrl}gamehub") // This will now be correct
                 .WithAutomaticReconnect(new SignalRRetryPolicy(_logger))
                 .AddJsonProtocol(options =>
                 {

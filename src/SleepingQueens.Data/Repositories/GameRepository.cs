@@ -395,7 +395,7 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
         await executionStrategy.ExecuteAsync(async () =>
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            //using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
@@ -423,6 +423,8 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
                     };
                     _context.GameCards.Add(gameCard);
                 }
+
+                await _context.SaveChangesAsync();
 
                 // Get all queen cards
                 var queenCards = await _context.Cards
@@ -464,10 +466,22 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
                 // Draw initial hand for first player (5 cards)
                 for (int i = 0; i < 5; i++)
                 {
-                    var gameCard = await DrawCardFromDeckAsync(game.Id);
-                    if (gameCard != null)
+                    var card = await _context.GameCards
+                    .Include(gc => gc.Card)
+                    .Where(gc => gc.GameId == game.Id && gc.Location == CardLocation.Deck)
+                    .OrderBy(gc => gc.Position)
+                    .FirstOrDefaultAsync();
+
+                    if (card != null)
                     {
-                        await AddCardToPlayerHandAsync(firstPlayer.Id, gameCard.CardId);
+                        _context.GameCards.Remove(card);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    //var gameCard = await DrawCardFromDeckAsync(game.Id);
+                    if (card != null)
+                    {
+                        await AddCardToPlayerHandAsync(firstPlayer.Id, card.CardId);
                     }
                 }
 
@@ -483,11 +497,11 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
                 };
                 await RecordMoveAsync(initialMove);
 
-                await transaction.CommitAsync();
+                //await transaction.CommitAsync();
             }
             catch
             {
-                await transaction.RollbackAsync();
+                //await transaction.RollbackAsync();
                 throw;
             }
         });

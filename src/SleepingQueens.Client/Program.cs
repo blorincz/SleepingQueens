@@ -16,7 +16,6 @@ builder.Services.AddScoped(sp => new HttpClient
 // Register services
 builder.Services.AddScoped<ISignalRService, SignalRService>();
 builder.Services.AddScoped<IGameStateService, GameStateService>();
-builder.Services.AddScoped<IToastService, ToastService>();
 
 
 // Add logging
