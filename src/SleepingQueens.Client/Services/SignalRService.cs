@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using SleepingQueens.Client.Events;
+using SleepingQueens.Client.Logging;
 using SleepingQueens.Shared.Models.DTOs;
 using SleepingQueens.Shared.Models.Game.Enums;
 using System.Text.Json;
@@ -49,47 +50,30 @@ public interface ISignalRService : IAsyncDisposable
     Task<ApiResponse> RemovePlayerAsync(Guid gameId, Guid playerId);
 }
 
-public class SignalRService : ISignalRService
+public class SignalRService(
+    NavigationManager navigationManager,
+    IConfiguration configuration,
+    ILogger<SignalRService> logger) : ISignalRService
 {
     private HubConnection? _hubConnection;
-    private readonly NavigationManager _navigationManager;
-    private readonly ILogger<SignalRService> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly NavigationManager _navigationManager = navigationManager;
+    private readonly ILogger<SignalRService> _logger = logger;
+    private readonly IConfiguration _configuration = configuration;
     private bool _isDisposed;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
 
     // Async Events
-    public IAsyncEvent<GameStateDto> OnGameStateUpdated { get; }
-    public IAsyncEvent<GameStartedEvent> OnGameStarted { get; }
-    public IAsyncEvent<PlayerJoinedEvent> OnPlayerJoined { get; }
-    public IAsyncEvent<PlayerLeftEvent> OnPlayerLeft { get; }
-    public IAsyncEvent<(string PlayerName, string Message)> OnChatMessage { get; }
-    public IAsyncEvent<Exception> OnConnectionError { get; }
-    public IAsyncEvent<string> OnConnectionStatusChanged { get; }
-    public IAsyncEvent<ApiResponse> OnGameActionResponse { get; }
+    public IAsyncEvent<GameStateDto> OnGameStateUpdated { get; } = new AsyncEvent<GameStateDto>(logger);
+    public IAsyncEvent<GameStartedEvent> OnGameStarted { get; } = new AsyncEvent<GameStartedEvent>(logger);
+    public IAsyncEvent<PlayerJoinedEvent> OnPlayerJoined { get; } = new AsyncEvent<PlayerJoinedEvent>(logger);
+    public IAsyncEvent<PlayerLeftEvent> OnPlayerLeft { get; } = new AsyncEvent<PlayerLeftEvent>(logger);
+    public IAsyncEvent<(string PlayerName, string Message)> OnChatMessage { get; } = new AsyncEvent<(string, string)>(logger);
+    public IAsyncEvent<Exception> OnConnectionError { get; } = new AsyncEvent<Exception>(logger);
+    public IAsyncEvent<string> OnConnectionStatusChanged { get; } = new AsyncEvent<string>(logger);
+    public IAsyncEvent<ApiResponse> OnGameActionResponse { get; } = new AsyncEvent<ApiResponse>(logger);
 
     public HubConnectionState ConnectionState => _hubConnection?.State ?? HubConnectionState.Disconnected;
     public bool IsConnected => ConnectionState == HubConnectionState.Connected;
-
-    public SignalRService(
-        NavigationManager navigationManager,
-        IConfiguration configuration,
-        ILogger<SignalRService> logger)
-    {
-        _navigationManager = navigationManager;
-        _configuration = configuration;
-        _logger = logger;
-
-        // Initialize async events with logging
-        OnGameStateUpdated = new AsyncEvent<GameStateDto>(logger);
-        OnGameStarted = new AsyncEvent<GameStartedEvent>(logger);
-        OnPlayerJoined = new AsyncEvent<PlayerJoinedEvent>(logger);
-        OnPlayerLeft = new AsyncEvent<PlayerLeftEvent>(logger);
-        OnChatMessage = new AsyncEvent<(string, string)>(logger);
-        OnConnectionError = new AsyncEvent<Exception>(logger);
-        OnConnectionStatusChanged = new AsyncEvent<string>(logger);
-        OnGameActionResponse = new AsyncEvent<ApiResponse>(logger);
-    }
 
     public async Task ConnectAsync()
     {
@@ -98,7 +82,7 @@ public class SignalRService : ISignalRService
         {
             if (_hubConnection != null && _hubConnection.State != HubConnectionState.Disconnected)
             {
-                _logger.LogDebug("Already connected or connecting. State: {State}", _hubConnection.State);
+                _logger.LogAlreadyConnected(_hubConnection.State);
                 return;
             }
 
@@ -129,7 +113,7 @@ public class SignalRService : ISignalRService
             try
             {
                 await _hubConnection.StartAsync();
-                _logger.LogInformation("SignalR connected successfully. Connection ID: {ConnectionId}", _hubConnection.ConnectionId);
+                _logger.LogSignalRConnected(_hubConnection.ConnectionId);
                 await OnConnectionStatusChanged.InvokeAsync("Connected");
             }
             catch (Exception ex)
@@ -189,32 +173,32 @@ public class SignalRService : ISignalRService
 
         _hubConnection.On<GameStartedEvent>("GameStarted", async (gameStartedEvent) =>
         {
-            _logger.LogDebug("Received GameStarted event. GameId: {GameId}", gameStartedEvent.GameId);
+            _logger.LogReceivedGameStartedEvent(gameStartedEvent.GameId);
             await OnGameStarted.InvokeAsync(gameStartedEvent);
         });
 
         _hubConnection.On<PlayerJoinedEvent>("PlayerJoined", async (playerJoinedEvent) =>
         {
-            _logger.LogDebug("Received PlayerJoined event. Player: {PlayerName}", playerJoinedEvent.PlayerName);
+            _logger.LogReceivedPlayerJoinedEvent(playerJoinedEvent.PlayerName);
             await OnPlayerJoined.InvokeAsync(playerJoinedEvent);
         });
 
         _hubConnection.On<PlayerLeftEvent>("PlayerLeft", async (playerLeftEvent) =>
         {
-            _logger.LogDebug("Received PlayerLeft event. Player: {PlayerName}", playerLeftEvent.PlayerName);
+            _logger.LogReceivedPlayerLeftEvent(playerLeftEvent.PlayerName);
             await OnPlayerLeft.InvokeAsync(playerLeftEvent);
         });
 
         _hubConnection.On<ChatMessage>("ChatMessageReceived", async (chatMessage) =>
         {
-            _logger.LogDebug("Received chat message from {PlayerName}", chatMessage.PlayerName);
+            _logger.LogReceivedChatMessageEvent(chatMessage.PlayerName);
             await OnChatMessage.InvokeAsync((chatMessage.PlayerName, chatMessage.Message));
         });
 
         _hubConnection.Closed += async (error) =>
         {
             var status = error != null ? $"Closed with error: {error.Message}" : "Closed";
-            _logger.LogWarning("SignalR connection closed: {Status}", status);
+            _logger.LogSignalRConnectionClosedWarning(status);
 
             if (error != null)
             {
@@ -225,7 +209,7 @@ public class SignalRService : ISignalRService
 
         _hubConnection.Reconnected += (connectionId) =>
         {
-            _logger.LogInformation("SignalR reconnected. New Connection ID: {ConnectionId}", connectionId);
+            _logger.LogSignalRReconnected(connectionId ?? "");
             return OnConnectionStatusChanged.InvokeAsync("Reconnected");
         };
 
@@ -245,7 +229,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogInformation("Creating game for player: {PlayerName}", request.PlayerName);
+            _logger.LogGameCreated(request.PlayerName);
 
             var response = await _hubConnection.InvokeAsync<ApiResponse<CreateGameResult>>("CreateGame", request);
             await NotifyGameActionResponse(response);
@@ -260,8 +244,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogInformation("Player {PlayerName} joining game: {GameCode}",
-                request.PlayerName, request.GameCode);
+            _logger.LogPlayerJoiningGame(request.PlayerName, request.GameCode);
 
             var response = await _hubConnection.InvokeAsync<ApiResponse<JoinGameResult>>("JoinGame", request);
             await NotifyGameActionResponse(response);
@@ -276,7 +259,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogInformation("Starting game: {GameId}", gameId);
+            _logger.LogGameStarted(gameId);
 
             // Map from StartGameResponse to ApiResponse
             var response = await _hubConnection.InvokeAsync<StartGameResponse>("StartGame", gameId);
@@ -302,7 +285,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogDebug("Playing card {CardId} in game {GameId}", request.CardId, request.GameId);
+            _logger.LogPlayingCard(request.CardId, request.GameId);
 
             var response = await _hubConnection.InvokeAsync<ApiResponse<GameStateDto>>("PlayCard", request);
             await NotifyGameActionResponse(response);
@@ -317,7 +300,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogDebug("Drawing card in game {GameId}", gameId);
+            _logger.LogDrawCard(gameId);
 
             // Map from DrawCardResponse to ApiResponse<DrawCardResult>
             var response = await _hubConnection.InvokeAsync<DrawCardResponse>("DrawCard", gameId);
@@ -346,7 +329,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogDebug("Ending turn in game {GameId}", gameId);
+            _logger.LogEndingTurn(gameId);
 
             // Map from EndTurnResponse to ApiResponse<GameStateDto>
             var response = await _hubConnection.InvokeAsync<EndTurnResponse>("EndTurn", gameId);
@@ -370,7 +353,8 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogDebug("Discarding {Count} cards in game {GameId}", cardIds.Count(), gameId);
+            int cardCount = cardIds.Count();
+            _logger.LogDiscardingCards(cardCount, gameId);
 
             // Note: You need to add a DiscardCards method to your GameHub
             // For now, returning a placeholder response
@@ -389,7 +373,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogDebug("Getting game state for game {GameId}", gameId);
+            _logger.LogGettingGameState(gameId);
 
             var response = await _hubConnection.InvokeAsync<ApiResponse<GameStateDto>>("GetGameState", gameId);
             return response;
@@ -426,7 +410,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogDebug("Sending chat message to game {GameId}", gameId);
+            _logger.LogSendingChatMessage(gameId);
 
             await _hubConnection.SendAsync("SendMessage", gameId, message);
 
@@ -448,7 +432,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogInformation("Adding AI player (Level: {Level}) to game {GameId}", level, gameId);
+            _logger.LogAddingAIPlayer(level, gameId);
 
             return await _hubConnection.InvokeAsync<ApiResponse>("AddAIPlayer", gameId, level);
         }, "AddAIPlayer");
@@ -461,7 +445,7 @@ public class SignalRService : ISignalRService
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
-            _logger.LogInformation("Removing player {PlayerId} from game {GameId}", playerId, gameId);
+            _logger.LogRemovingPlayer(playerId, gameId);
 
             return await _hubConnection.InvokeAsync<ApiResponse>("RemovePlayer", gameId, playerId);
         }, "RemovePlayer");
@@ -475,21 +459,21 @@ public class SignalRService : ISignalRService
     {
         try
         {
-            _logger.LogDebug("Executing SignalR method: {MethodName}", methodName);
+            _logger.LogExecutingSignalIRMethod(methodName);
 
             if (!IsConnected)
             {
-                _logger.LogWarning("Attempting to execute {MethodName} while disconnected. Reconnecting...", methodName);
+                _logger.LogAttemptingToExecuteSignalIRMethodWarning(methodName);
                 await ConnectAsync();
             }
 
             var result = await operation();
-            _logger.LogDebug("SignalR method {MethodName} executed successfully", methodName);
+            _logger.LogSignalRMethodExecutedSuccessfully(methodName);
             return result;
         }
         catch (HubException hubEx)
         {
-            _logger.LogError(hubEx, "Hub exception in SignalR method {MethodName}", methodName);
+            _logger.LogHubError(hubEx, methodName);
             await OnConnectionError.InvokeAsync(hubEx);
 
             // For generic methods, we need to handle the return type properly
@@ -518,7 +502,7 @@ public class SignalRService : ISignalRService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing SignalR method {MethodName}", methodName);
+            _logger.LogExecutingSignalRMethodError(ex, methodName);
             await OnConnectionError.InvokeAsync(ex);
             throw;
         }
@@ -572,38 +556,30 @@ public class SignalRService : ISignalRService
 #region Supporting Classes
 
 // Custom retry policy with exponential backoff
-public class SignalRRetryPolicy : IRetryPolicy
+public class SignalRRetryPolicy(ILogger logger) : IRetryPolicy
 {
-    private readonly ILogger _logger;
-    private static readonly TimeSpan[] _retryDelays = new[]
-    {
+    private readonly ILogger _logger = logger;
+    private static readonly TimeSpan[] _retryDelays =
+    [
         TimeSpan.Zero,           // Immediate retry for first failure
         TimeSpan.FromSeconds(2),
         TimeSpan.FromSeconds(5),
         TimeSpan.FromSeconds(10),
         TimeSpan.FromSeconds(30),
         TimeSpan.FromMinutes(1)
-    };
-
-    public SignalRRetryPolicy(ILogger logger)
-    {
-        _logger = logger;
-    }
+    ];
 
     public TimeSpan? NextRetryDelay(RetryContext retryContext)
     {
         if (retryContext.PreviousRetryCount >= _retryDelays.Length - 1)
         {
-            _logger.LogWarning("Max retry attempts reached ({Attempts}). Stopping retries.",
-                retryContext.PreviousRetryCount);
+            _logger.LogMaxRetriesWarning(retryContext.PreviousRetryCount);
             return null; // Stop retrying
         }
 
         var delay = _retryDelays[retryContext.PreviousRetryCount];
 
-        _logger.LogWarning(
-            "SignalR retry attempt {Attempt} after {ElapsedMilliseconds}ms. Next delay: {Delay}",
-            retryContext.PreviousRetryCount + 1,
+        _logger.LogRetryAttemptWarning(retryContext.PreviousRetryCount + 1,
             retryContext.ElapsedTime.TotalMilliseconds,
             delay);
 
