@@ -27,6 +27,43 @@
         </button>
     </div>
     
+    @if (showRulesModal)
+    {
+        <div class="modal-backdrop show" @onclick="CloseRulesModal"></div>
+        <div class="modal show d-block" tabindex="-1">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Sleeping Queens - Game Rules</h5>
+                        <button type="button" class="btn-close" @onclick="CloseRulesModal"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <div class="rules-image-container">
+                            <img src="Images/SQEngRules.jpg" 
+                                 alt="Sleeping Queens Game Rules" 
+                                 class="rules-image img-fluid"
+                                 @onclick="ZoomRules" />
+                            @if (isZoomed)
+                            {
+                                <div class="zoom-overlay" @onclick="UnzoomRules">
+                                    <img src="Images/SQEngRules.jpg"
+                                         alt="Sleeping Queens Game Rules - Zoomed" 
+                                         class="rules-image-zoomed" />
+                                    <div class="zoom-instructions">Click anywhere to zoom out</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseRulesModal">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (showCreateModal)
     {
         <div class="modal-backdrop show"></div>
@@ -109,31 +146,33 @@
 @code {
     private bool showCreateModal = false;
     private bool showJoinModal = false;
+    private bool showRulesModal = false;
+    private bool isZoomed = false;
     private string playerName = string.Empty;
     private string joinPlayerName = string.Empty;
     private string gameCode = string.Empty;
     private string joinErrorMessage = string.Empty;
     private int maxPlayers = 4;
     private int targetScore = 40;
-    
+
     protected override async Task OnInitializedAsync()
     {
         await SignalRService.ConnectAsync();
     }
-    
+
     private void CreateNewGame()
     {
         showCreateModal = true;
     }
-    
+
     private void JoinExistingGame()
     {
         showJoinModal = true;
     }
-    
+
     private void ViewRules()
     {
-        Navigation.NavigateTo("/rules");
+        showRulesModal = true;
     }
     
     private void CloseCreateModal()
@@ -148,6 +187,27 @@
         joinPlayerName = string.Empty;
         gameCode = string.Empty;
         joinErrorMessage = string.Empty;
+    }
+
+    private void CloseRulesModal()
+    {
+        showRulesModal = false;
+        isZoomed = false; // Reset zoom when closing
+    }
+
+    private void ToggleZoom()
+    {
+        isZoomed = !isZoomed;
+    }
+
+    private void ZoomRules()
+    {
+        isZoomed = true;
+    }
+
+    private void UnzoomRules()
+    {
+        isZoomed = false;
     }
     
     private async Task SubmitCreateGame()

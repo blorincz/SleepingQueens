@@ -246,7 +246,7 @@ else
         {
             _currentPlayerId = PlayerId;
         }
-        var _currentGameId = await GetGameIdFromCode(GameCode);
+        _currentGameId = await GetGameIdFromCode(GameCode);
         if (_currentGameId.HasValue)
         {
             var response = await SignalRService.GetGameStateAsync(_currentGameId.Value);
