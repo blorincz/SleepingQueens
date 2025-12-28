@@ -7,16 +7,20 @@ namespace SleepingQueens.Server.GameEngine;
 public interface IGameEngine
 {
     // Game lifecycle
-    Game CreateGame(GameSettings settings, Player creator);
-    Task<Game> StartGameAsync(Guid gameId);
+    Task<ActiveGamesResult> GetActiveGamesAsync();
+    Task<Game> CreateGame(GameSettings settings, Player creator);
+    Task<Game> StartGameAsync(Guid gameId, Guid requestingPlayerId);
     Task<Game> EndGameAsync(Guid gameId, Guid? winnerId = null);
     Task<Game> AbandonGameAsync(Guid gameId);
 
     // Player management
     Task<Player> AddPlayerAsync(Guid gameId, Player player);
-    Task<Player> AddAIPlayerAsync(Guid gameId, AILevel level = AILevel.Medium);
-    Task RemovePlayerAsync(Guid gameId, Guid playerId);
+    Task<AddAIPlayerResult> AddAIPlayerAsync(Guid gameId, AILevel level, Guid requestingPlayerId);
+    Task<RemovePlayerResult> RemovePlayerAsync(Guid gameId, Guid playerIdToRemove, Guid requestingPlayerId);
     Task UpdatePlayerScoreAsync(Guid playerId, int score);
+    Task<JoinGameResult> JoinGameAsync(string gameCode, string playerName, string connectionId, Guid? existingPlayerId = null);
+    Task<PlayerDisconnectResult> HandlePlayerDisconnectAsync(Guid playerId);
+    Task<ReconnectPlayerResult> ReconnectPlayerAsync(Guid gameId, Guid playerId, string connectionId);
 
     // Game actions
     Task<GameActionResult> PlayCardAsync(Guid gameId, Guid playerId, Guid cardId,
@@ -40,6 +44,7 @@ public interface IGameEngine
     // Game settings
     Task UpdateGameSettingsAsync(Guid gameId, GameSettings settings);
     Task<GameSettings> GetGameSettingsAsync(Guid gameId);
+    
 }
 
 public record GameActionResult(

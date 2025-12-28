@@ -60,13 +60,49 @@ public static partial class LoggerExtensions
         Message = "Error discarding cards in game {GameId}")]
     public static partial void LogGameDiscardingError(this ILogger logger, Exception ex, Guid gameId);
 
+    [LoggerMessage(
+        EventId = 9010,
+        Level = LogLevel.Error,
+        Message = "Error in HandlePlayerDisconnectAsync for player {PlayerId}")]
+    public static partial void LogPlayerDisconnectError(this ILogger logger, Exception ex, Guid playerId);
+
+    [LoggerMessage(
+        EventId = 9011,
+        Level = LogLevel.Error,
+        Message = "Error reconnecting player {PlayerId} to game {gameId}")]
+    public static partial void LogPlayerReconnectError(this ILogger logger, Exception ex, Guid playerId, Guid gameId);
+
     // Warning Logging
 
     [LoggerMessage(
         EventId = 5001,
         Level = LogLevel.Warning,
-        Message = "Player {PlayerId} disconnected during active game")]
-    public static partial void LogPlayerDisconnectedWarning(this ILogger logger, Guid playerId);
+        Message = "Player {PlayerId} disconnected during active game. Can reconnect: {CanReconnect}")]
+    public static partial void LogPlayerDisconnectedWarning(this ILogger logger, Guid playerId, bool canReconnect = false);
+
+    [LoggerMessage(
+        EventId = 5002,
+        Level = LogLevel.Warning,
+        Message = "Failed to notify players for event {EventName} in game {GameId}")]
+    public static partial void LogFailedToNotifyPlayersWarning(this ILogger logger, Exception ex, string eventName, Guid gameId);
+
+    [LoggerMessage(
+        EventId = 5003,
+        Level = LogLevel.Warning,
+        Message = "Failed to notify player {PlayerId} for event {EventName}")]
+    public static partial void LogFailedToNotifyPlayerWarning(this ILogger logger, Exception ex, Guid playerId, string eventName);
+
+    [LoggerMessage(
+        EventId = 5004,
+        Level = LogLevel.Warning,
+        Message = "Cannot notify player {PlayerId}: no active connection")]
+    public static partial void LogCannotNotifyPlayerWarning(this ILogger logger, Guid playerId);
+
+    [LoggerMessage(
+        EventId = 5005,
+        Level = LogLevel.Warning,
+        Message = "Skipping {PlayerId} turn due to disconnection in game {gameId}. It is now {nextPlayerId} turn")]
+    public static partial void LogTurnSkippedDueToDisconnect(this ILogger logger, Guid playerId, Guid nextPlayerId, Guid gameId);
 
     // Debug Logging
 
@@ -150,4 +186,34 @@ public static partial class LoggerExtensions
     Level = LogLevel.Information,
     Message = "Client connected: {ConnectionId}")]
     public static partial void LogClientConnected(this ILogger logger, string connectionId);
+
+    [LoggerMessage(
+    EventId = 1013,
+    Level = LogLevel.Information,
+    Message = "Player {PlayerId} was dealt {initialHandSize} cards")]
+    public static partial void LogPlayerDealtCards(this ILogger logger, Guid playerId, int initialHandSize);
+
+    [LoggerMessage(
+    EventId = 1014,
+    Level = LogLevel.Information,
+    Message = "Player {PlayerId} reconnected to game {gameId}")]
+    public static partial void LogPlayerReconnected(this ILogger logger, Guid playerId, Guid gameId);
+
+    [LoggerMessage(
+    EventId = 1015,
+    Level = LogLevel.Information,
+    Message = "Host changed from {PlayerId} to {NewHostId} in game {GameId}")]
+    public static partial void LogHostChanged(this ILogger logger, Guid playerId, Guid newHostId, Guid gameId);
+
+    [LoggerMessage(
+    EventId = 1016,
+    Level = LogLevel.Information,
+    Message = "All players reconnected in game {GameId}")]
+    public static partial void LogAllPlayersReconnected(this ILogger logger, Guid gameId);
+
+    [LoggerMessage(
+    EventId = 1017,
+    Level = LogLevel.Information,
+    Message = "Player {playerId} regained control in game {GameId}")]
+    public static partial void LogPlayerRegainedControl(this ILogger logger, Guid playerId, Guid gameId);
 }

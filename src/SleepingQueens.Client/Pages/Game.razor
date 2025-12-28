@@ -21,63 +21,66 @@
 }
 else
 {
-    <div class="game-container">
-        <!-- Game Header -->
-        <div class="game-header">
-            <div class="game-info">
-                <h3>Game: @gameState.Game?.Code</h3>
-                <div class="game-phase">
-                    <span class="badge @GetPhaseBadgeClass()">@gameState.Game?.Phase</span>
-                </div>
+    <div class="game-layout">
+        <!-- ========== HEADER ========== -->
+        <header class="game-header">
+            <div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ReturnToLobby">
+                    ← Return to Lobby
+                </button>
             </div>
-            <div class="turn-indicator">
+
+            <div class="target-score">
+                <span class="score-label">Target:</span>
+                <span class="score-value">@gameState.Game?.TargetScore</span>
+            </div>
+
+            <div class="turn-indicator @(isPlayerTurn ? "player-turn" : "opponent-turn")">
                 @if (isPlayerTurn)
                 {
-                    <div class="alert alert-success">
-                        <strong>Your Turn!</strong>
-                    </div>
+                    <span class="turn-text">YOUR TURN</span>
                 }
                 else
                 {
-                    <div class="alert alert-info">
-                        <strong>@gameState.CurrentPlayer?.Name's Turn</strong>
-                    </div>
+                    <span class="turn-text">@gameState.CurrentPlayer?.Name's Turn</span>
                 }
             </div>
-            <div class="score-info">
-                <div class="target-score">
-                    Target: @gameState.Game?.TargetScore points
-                </div>
-                <button class="btn btn-sm btn-outline-secondary" @onclick="ReturnToLobby">
-                    Return to Lobby
-                </button>
-            </div>
-        </div>
 
-        <!-- Main Game Area -->
-        <div class="game-board">
-            <!-- Opponents Area -->
-            <div class="opponents-area">
+            <div class="game-code">
+                <span class="code-label">Game:</span>
+                <span class="code-value">@gameState.Game?.Code</span>
+            </div>
+
+            <div>
+                <div class="game-status">
+                    <span class="status-badge @GetPhaseBadgeClass()">@gameState.Game?.Phase</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ========== OPPONENT AREA ========== -->
+        <section class="opponent-area">
+            <div class="opponent-tabs">
                 @foreach (var opponent in GetOpponents())
                 {
-                    <div class="opponent" @onclick="() => SelectPlayer(opponent.Id)">
-                        <div class="opponent-name">@opponent.Name</div>
-                        <div class="opponent-score">@opponent.Score points</div>
+                    <button class="opponent-tab @(selectedOpponentId == opponent.Id ? "active" : "")"
+                            @onclick="() => SelectOpponent(opponent.Id)">
+                        <span class="opponent-name">@opponent.Name</span>
+                        <span class="opponent-stats">
+                            Q:<span class="stat-value">@opponent.Queens?.Count</span>
+                            S:<span class="stat-value">@opponent.Score</span>
+                        </span>
+                    </button>
+                }
+            </div>
 
-                        <!-- Opponent's Queens -->
-                        <div class="opponent-queens">
-                            @foreach (var queen in opponent.Queens ?? Enumerable.Empty<QueenDto>())
-                            {
-                                var queenTitle = $"{queen.Name} ({queen.PointValue} pts)";
-                                <QueenDisplay Queen="queen"
-                                              IsAwake="true"
-                                              AdditionalClasses="queen-token"/>
-                            }
-                        </div>
-
-                        <!-- Opponent's Hand (facedown cards) -->
-                        <div class="opponent-hand">
-                            @for (int i = 0; i < opponent.Hand.Count; i++)
+            @if (selectedOpponent != null)
+            {
+                <div class="opponent-details">
+                    <div class="opponent-cards">
+                        <h6>@selectedOpponent.Name's Cards (@selectedOpponent.Hand.Count)</h6>
+                        <div class="cards-row">
+                            @for (int i = 0; i < selectedOpponent.Hand.Count; i++)
                             {
                                 <CardDisplay IsFaceDown="true"
                                              AdditionalClasses="opponent-card"
@@ -85,64 +88,140 @@ else
                             }
                         </div>
                     </div>
+
+                    <div class="opponent-queens">
+                        <h6>@selectedOpponent.Name's Queens</h6>
+                        <div class="queens-row">
+                            @foreach (var queen in selectedOpponent.Queens ?? Enumerable.Empty<QueenDto>())
+                            {
+                                var queenTitle = "@queen.Name(@queen.PointValue pts)";
+                                <QueenDisplay Queen="queen"
+                                              IsAwake="true"
+                                              AdditionalClasses="queen-token"
+                                              Title="@queenTitle" />
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </section>
+
+        <!-- ========== SLEEPING QUEENS ========== -->
+        <section class="sleeping-queens-section">
+            <div class="sleeping-queens-grid">
+                @{
+                    List<QueenDto> queens = (gameState.SleepingQueens ?? Enumerable.Empty<QueenDto>()).ToList();
+                    int halfQueens = queens.Count() / 2;
+                    for (int i = 0; i < halfQueens; i++)
+                    {
+                        <QueenDisplay Queen="queens[i]"
+                                      IsSelected="selectedQueenId == queens[i].Id"
+                                      IsFaceDown="true"
+                                      OnQueenIdClick="() => SelectQueen(queens[i].Id)"
+                                      IsClickable="@isPlayerTurn" />
+                    }
+
+                    <!-- ========== DECK & DISCARD ========== -->
+                    <div class="deck-area">
+                        <div class="deck" @onclick="DrawCard" title="Click to draw card">
+                        </div>
+                        <div class="discard" title="Discard Pile">
+                            @if (gameState.DiscardPile?.Count > 0)
+                            {
+                                <!-- Show last discarded card if available -->
+                                <div class="discard-card">
+                                    <CardDisplay Card="lastDiscardedCard"
+                                                 AdditionalClasses="discarded-card"
+                                                 IsClickable="false" />
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="discard-pile-empty">Discard</div>
+                            }
+                        </div>
+                    </div>
+
+                    for (int i = halfQueens; i < queens.Count(); i++)
+                    {
+                        <QueenDisplay Queen="queens[i]"
+                                      IsSelected="selectedQueenId == queens[i].Id"
+                                      IsFaceDown="true"
+                                      OnQueenIdClick="() => SelectQueen(queens[i].Id)"
+                                      IsClickable="@isPlayerTurn" />
+                    }
+
+                }
+            </div>
+        </section>
+
+        <!-- ========== PLAYER AREA ========== -->
+        <section class="player-area">
+            <div class="player-header">
+                <div class="player-info-left">
+                    <h4>@currentPlayerName</h4>
+                </div>
+
+                <div class="player-info-center">
+                    <div class="selected-count">
+                        <span class="count-badge">@selectedCards.Count</span>
+                        <span class="count-label">cards selected</span>
+                    </div>
+                </div>
+
+                <div class="player-info-right">
+                    <div class="player-score">
+                        <span class="score-label">Score:</span>
+                        <span class="score-value">@currentPlayerScore</span>
+                    </div>
+                </div>
+            </div>
+
+
+
+            <!-- Action Buttons -->
+            <div class="action-buttons-row">
+                <button class="btn btn-primary action-btn" @onclick="PlaySelectedCard"
+                        @disabled="@(!CanPlaySelectedCard())"
+                        title="@GetPlayButtonTooltip()">
+                    <span class="btn-text">Play Card</span>
+                </button>
+
+                <button class="btn btn-secondary action-btn" @onclick="DiscardSelected"
+                        @disabled="@(!CanDiscardSelected())"
+                        title="@GetDiscardButtonTooltip()">
+                    <span class="btn-text">Discard</span>
+                </button>
+
+                <button class="btn btn-success action-btn" @onclick="EndTurn"
+                        @disabled="@(!CanEndTurn())"
+                        title="End your turn (must have 5 cards)">
+                    <span class="btn-text">End Turn</span>
+                </button>
+
+                @if (IsBeingAttacked)
+                {
+                    <div class="defense-buttons">
+                        @if (HasDragonCard())
+                        {
+                            <button class="btn btn-danger action-btn btn-sm" @onclick="PlayDragon">
+                                <span class="btn-text">Defend with Dragon</span>
+                            </button>
+                        }
+                        @if (HasWandCard())
+                        {
+                            <button class="btn btn-info action-btn btn-sm" @onclick="PlayWand">
+                                <span class="btn-text">Defend with Wand</span>
+                            </button>
+                        }
+                    </div>
                 }
             </div>
 
-            <!-- Center Play Area -->
-            <div class="center-area">
-                <!-- Sleeping Queens -->
-                <div class="sleeping-queens">
-                    <h5>Sleeping Queens</h5>
-                    <div class="queens-grid">
-                        @foreach (var queen in gameState.SleepingQueens ?? Enumerable.Empty<QueenDto>())
-                        {
-                            <QueenDisplay Queen="queen"
-                                          IsSelected="selectedQueenId == queen.Id"
-                                          IsFaceDown="true"
-                                          OnQueenIdClick="() => SelectQueen(queen.Id)"
-                                          IsClickable="@isPlayerTurn" />
-                        }
-                    </div>
-                </div>
-
-                <!-- Deck and Discard -->
-                <div class="deck-area">
-                    <div class="deck" @onclick="DrawCard" title="Click to draw">
-                        <div class="deck-count">@gameState.CardsInDeck</div>
-                        <div>Deck</div>
-                    </div>
-                    <div class="discard" title="Discard Pile">
-                        <div class="discard-count">@gameState.DiscardPile.Count</div>
-                        <div>Discard</div>
-                    </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="action-buttons">
-                    @if (isPlayerTurn)
-                    {
-                        <button class="btn btn-primary" @onclick="EndTurn"
-                                @disabled="@(selectedCards.Count == 0)">
-                            End Turn
-                        </button>
-                        <button class="btn btn-secondary" @onclick="DiscardSelected"
-                                @disabled="@(selectedCards.Count == 0)">
-                            Discard Selected
-                        </button>
-                    }
-                </div>
-            </div>
-
-            <!-- Player Area -->
-            <div class="player-area">
-                <div class="player-info">
-                    <h4>@currentPlayerName</h4>
-                    <div class="player-score">Score: @currentPlayerScore</div>
-                </div>
-
-                <!-- Player's Hand -->
-                <div class="player-hand">
-                    <h5>Your Hand (@selectedCards.Count selected)</h5>
+            <!-- Player's Cards and Queens -->
+            <div class="player-content">
+                <div class="player-cards">
+                    <h6>Your Hand (@currentPlayerHand.Count/5)</h6>
                     <div class="cards-grid">
                         @foreach (var card in currentPlayerHand)
                         {
@@ -154,27 +233,77 @@ else
                     </div>
                 </div>
 
-                <!-- Player's Queens -->
                 <div class="player-queens">
-                    <h5>Your Queens</h5>
+                    <h6>Your Queens</h6>
                     <div class="queens-grid">
                         @foreach (var queen in currentPlayerQueens)
                         {
-                            var queenTitle = $"{queen.Name} ({queen.PointValue} pts)";
+                            var queenTitle = "@queen.Name(@queen.PointValue pts)";
                             <QueenDisplay Queen="queen"
                                           IsAwake="true"
-                                          AdditionalClasses="queen-token"
                                           Title="@queenTitle" />
                         }
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Chat Section -->
-        <div class="game-chat">
-            <h5>Game Chat</h5>
-            <div class="chat-messages" @ref="chatMessagesContainer">
+        <!-- ========== FOOTER ========== -->
+        <footer class="game-footer">
+            <div class="chat-preview" @onclick="ToggleChatModal">
+                <div class="latest-message">
+                    @if (chatMessages.Count > 0)
+                    {
+                        var latest = chatMessages.Last();
+                        <span class="sender">@latest.PlayerName:</span>
+                        <span class="message">@latest.Message</span>
+                    }
+                    else
+                    {
+                        <span class="no-messages">No messages yet</span>
+                    }
+                </div>
+                <button class="btn btn-sm btn-outline-secondary chat-toggle">
+                    💬
+                </button>
+            </div>
+            <div class="status-container">
+                <!-- Status Messages -->
+                @if (!string.IsNullOrEmpty(actionStatus))
+                {
+                    <div class="action-status alert alert-info">
+                        @actionStatus
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(lastErrorMessage))
+                {
+                    <div class="action-status alert alert-danger">
+                        @lastErrorMessage
+                    </div>
+                }
+            </div>
+            <div class="chat-input">
+                <input type="text" class="form-control chat-box"
+                       @bind="chatMessage"
+                       placeholder="Type a message..."
+                       @onkeypress="HandleChatKeyPress" />
+                <button class="btn btn-primary" @onclick="SendChatMessage">
+                    Send
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Chat Modal -->
+    @if (showChatModal)
+    {
+        <div class="chat-modal-backdrop" @onclick="ToggleChatModal"></div>
+        <div class="chat-modal">
+            <div class="chat-modal-header">
+                <h5>Game Chat</h5>
+                <button class="btn-close" @onclick="ToggleChatModal"></button>
+            </div>
+            <div class="chat-modal-body">
                 @foreach (var message in chatMessages)
                 {
                     <div class="chat-message">
@@ -182,13 +311,8 @@ else
                     </div>
                 }
             </div>
-            <div class="chat-input">
-                <input type="text" class="form-control" @bind="chatMessage"
-                       placeholder="Type a message..." @onkeypress="HandleChatKeyPress" />
-                <button class="btn btn-primary" @onclick="SendChatMessage">Send</button>
-            </div>
         </div>
-    </div>
+    }
 }
 
 @code {
@@ -200,45 +324,43 @@ else
     private GameStateDto? gameState;
     private List<ChatMessageDisplay> chatMessages = new();
     private string chatMessage = string.Empty;
-    private ElementReference chatMessagesContainer;
     private List<Guid> selectedCards = new();
-    private Guid? selectedPlayerId;
     private Guid? selectedQueenId;
+    private Guid? selectedPlayerId;
     private bool isPlayerTurn = false;
     private Guid? _currentPlayerId;
     private Guid? _currentGameId;
+    private string actionStatus = string.Empty;
+    private bool showChatModal = false;
+    private bool isBeingAttacked = false;
+
+    // Selected opponent for the tab view
+    private Guid? selectedOpponentId;
+    private PlayerDto? selectedOpponent;
 
     private string currentPlayerName = string.Empty;
     private int currentPlayerScore = 0;
     private List<CardDto> currentPlayerHand = new();
     private List<QueenDto> currentPlayerQueens = new();
+    private CardDto? lastDiscardedCard;
+
+    public string lastErrorMessage { get; set; } = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
         await SignalRService.ConnectAsync();
         SetupEventSubscriptions();
-
         await LoadGameState();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            await ScrollChatToBottom();
-        }
     }
 
     private void SetupEventSubscriptions()
     {
-        // Subscribe to events using the Subscribe method
         SignalRService.OnGameStateUpdated.Subscribe(HandleGameStateUpdatedAsync);
         SignalRService.OnChatMessage.Subscribe(HandleChatMessageAsync);
         SignalRService.OnConnectionStatusChanged.Subscribe(HandleConnectionStatusChangedAsync);
         SignalRService.OnGameActionResponse.Subscribe(HandleGameActionResponseAsync);
+        // TODO: Add subscription for attack events
     }
-
-    public string lastErrorMessage { get; set; } = string.Empty;
 
     private async Task LoadGameState()
     {
@@ -271,6 +393,8 @@ else
     {
         gameState = newState;
         UpdatePlayerInfo();
+        UpdateSelectedOpponent();
+        UpdateLastDiscardedCard();
         StateHasChanged();
     }
 
@@ -289,6 +413,33 @@ else
         }
     }
 
+    private void UpdateSelectedOpponent()
+    {
+        if (gameState?.Players == null || !_currentPlayerId.HasValue) return;
+
+        // Set first opponent as selected if none selected
+        var opponents = GetOpponents().ToList();
+        if (!selectedOpponentId.HasValue && opponents.Any())
+        {
+            selectedOpponentId = opponents.First().Id;
+        }
+
+        selectedOpponent = opponents.FirstOrDefault(o => o.Id == selectedOpponentId);
+    }
+
+    private void UpdateLastDiscardedCard()
+    {
+        if (gameState?.DiscardPile?.Count > 0)
+        {
+            // Get last discarded card - you might need to adjust based on your data structure
+            lastDiscardedCard = null; // TODO: Set from discard pile
+        }
+        else
+        {
+            lastDiscardedCard = null;
+        }
+    }
+
     private IEnumerable<PlayerDto> GetOpponents()
     {
         if (gameState?.Players == null || !_currentPlayerId.HasValue)
@@ -297,29 +448,33 @@ else
         return gameState.Players.Where(p => p.Id != _currentPlayerId.Value);
     }
 
-    private async Task HandleGameStateUpdatedAsync(GameStateDto newState)
+    private void SelectOpponent(Guid opponentId)
     {
-        await InvokeAsync(() =>
-        {
-            UpdateGameState(newState);
-            selectedCards.Clear();
-            selectedPlayerId = null;
-            selectedQueenId = null;
-            StateHasChanged();
-        });
+        selectedOpponentId = opponentId;
+        UpdateSelectedOpponent();
+        StateHasChanged();
+    }
+
+    private void CheckForAttacks()
+    {
+        // TODO: Implement logic to check if player is being attacked
+        // This would come from game state or events
+        isBeingAttacked = false; // Temporary
     }
 
     private async Task HandleChatMessageAsync((string PlayerName, string Message) chatData)
     {
-        await InvokeAsync(async () =>
+        await InvokeAsync(() =>
         {
             chatMessages.Add(new ChatMessageDisplay
             {
                 PlayerName = chatData.PlayerName,
                 Message = chatData.Message
             });
+            // Keep only last 50 messages
+            if (chatMessages.Count > 50)
+                chatMessages.RemoveAt(0);
             StateHasChanged();
-            await ScrollChatToBottom();
         });
     }
 
@@ -327,7 +482,6 @@ else
     {
         await InvokeAsync(() =>
         {
-            // Update UI based on connection status
             Console.WriteLine($"Connection status changed: {status}");
             StateHasChanged();
         });
@@ -337,42 +491,19 @@ else
     {
         await InvokeAsync(() =>
         {
-            // Handle game action responses
             if (!response.Success && !string.IsNullOrEmpty(response.ErrorMessage))
             {
-                // Show error to user
-                Console.WriteLine($"Game action failed: {response.ErrorMessage}");
-                // You could set an error message property to display in UI
                 lastErrorMessage = response.ErrorMessage;
+            }
+            else if (response.Success)
+            {
+                lastErrorMessage = string.Empty;
             }
             StateHasChanged();
         });
     }
 
-    private async Task DrawCard()
-    {
-        if (!isPlayerTurn || !_currentGameId.HasValue) return;
-
-        var response = await SignalRService.DrawCardAsync(_currentGameId.Value);
-        if (!response.Success)
-        {
-            // Show error
-            Console.WriteLine($"Failed to draw card: {response.ErrorMessage}");
-        }
-    }
-
-    private async Task EndTurn()
-    {
-        if (!isPlayerTurn || !_currentGameId.HasValue) return;
-
-        var response = await SignalRService.EndTurnAsync(_currentGameId.Value);
-        if (!response.Success)
-        {
-            // Show error
-            Console.WriteLine($"Failed to end turn: {response.ErrorMessage}");
-        }
-    }
-
+    // ========== CARD SELECTION LOGIC ==========
     private void ToggleCardSelection(Guid cardId)
     {
         if (!isPlayerTurn) return;
@@ -383,8 +514,24 @@ else
         }
         else
         {
-            selectedCards.Add(cardId);
+            // Limit selection based on action type
+            var card = currentPlayerHand.FirstOrDefault(c => c.Id == cardId);
+            if (card != null)
+            {
+                if (card.Type == CardType.Jester || card.Type == CardType.King ||
+                    card.Type == CardType.Knight || card.Type == CardType.SleepingPotion)
+                {
+                    // Single card actions - clear other selections
+                    selectedCards.Clear();
+                }
+                else if (card.Type == CardType.Number)
+                {
+                    // For discard actions, allow multiple number cards
+                }
+                selectedCards.Add(cardId);
+            }
         }
+        UpdateActionStatus();
         StateHasChanged();
     }
 
@@ -394,10 +541,8 @@ else
 
         selectedPlayerId = playerId;
         selectedQueenId = null;
+        UpdateActionStatus();
         StateHasChanged();
-
-        // Check if we can play a card with this selection
-        CheckAndPlayCard();
     }
 
     private void SelectQueen(Guid queenId)
@@ -406,44 +551,307 @@ else
 
         selectedQueenId = queenId;
         selectedPlayerId = null;
+        UpdateActionStatus();
         StateHasChanged();
-
-        // Check if we can play a card with this selection
-        CheckAndPlayCard();
     }
 
-    private async void CheckAndPlayCard()
+    private void UpdateActionStatus()
     {
-        if (selectedCards.Count == 1 && _currentGameId.HasValue)
-        {
-            var cardId = selectedCards.First();
-            var request = new PlayCardRequest
-            {
-                GameId = _currentGameId.Value,
-                CardId = cardId,
-                TargetPlayerId = selectedPlayerId,
-                TargetQueenId = selectedQueenId
-            };
+        actionStatus = string.Empty;
 
-            var response = await SignalRService.PlayCardAsync(request);
-            if (!response.Success)
+        if (selectedCards.Count == 1)
+        {
+            var card = currentPlayerHand.FirstOrDefault(c => c.Id == selectedCards.First());
+            if (card != null)
             {
-                // Show error
-                Console.WriteLine($"Failed to play card: {response.ErrorMessage}");
+                switch (card.Type)
+                {
+                    case CardType.King:
+                        if (selectedQueenId == null)
+                            actionStatus = "Select a sleeping queen to awaken";
+                        else
+                            actionStatus = "Ready to awaken queen";
+                        break;
+                    case CardType.Knight:
+                        if (selectedPlayerId == null)
+                            actionStatus = "Select an opponent to steal from";
+                        else
+                            actionStatus = "Ready to steal from opponent";
+                        break;
+                    case CardType.SleepingPotion:
+                        if (selectedPlayerId == null)
+                            actionStatus = "Select an opponent to put to sleep";
+                        else
+                            actionStatus = "Ready to use sleeping potion";
+                        break;
+                    case CardType.Jester:
+                        actionStatus = "Play Jester - draw a card and see what happens!";
+                        break;
+                    case CardType.Number:
+                        actionStatus = "Select more cards to discard or play individually";
+                        break;
+                }
             }
+        }
+        else if (selectedCards.Count > 1)
+        {
+            var selectedCardTypes = currentPlayerHand
+                .Where(c => selectedCards.Contains(c.Id))
+                .Select(c => c.Type)
+                .ToList();
+
+            if (selectedCardTypes.All(t => t == CardType.Number))
+            {
+                if (selectedCards.Count == 2)
+                {
+                    // Check for identical numbers
+                    var numbers = currentPlayerHand
+                        .Where(c => selectedCards.Contains(c.Id))
+                        .Select(c => c.Value)
+                        .ToList();
+
+                    if (numbers[0] == numbers[1])
+                        actionStatus = "Ready to discard pair of identical numbers";
+                    else
+                        actionStatus = "Can only discard identical number pairs";
+                }
+                else if (selectedCards.Count >= 3)
+                {
+                    actionStatus = "Check if selected numbers form a valid addition equation";
+                }
+            }
+            else
+            {
+                actionStatus = "Can only discard multiple number cards";
+            }
+        }
+    }
+
+    // ========== GAME ACTION VALIDATION ==========
+    private bool CanPlaySelectedCard()
+    {
+        if (!isPlayerTurn || selectedCards.Count != 1) return false;
+
+        var card = currentPlayerHand.FirstOrDefault(c => c.Id == selectedCards.First());
+        if (card == null) return false;
+
+        return card.Type switch
+        {
+            CardType.King => selectedQueenId != null,
+            CardType.Knight => selectedPlayerId != null &&
+                             GetOpponents().Any(o => o.Id == selectedPlayerId &&
+                                                   o.Queens?.Count > 0),
+            CardType.SleepingPotion => selectedPlayerId != null &&
+                                     GetOpponents().Any(o => o.Id == selectedPlayerId &&
+                                                           o.Queens?.Count > 0),
+            CardType.Jester => true,
+            CardType.Dragon or CardType.Wand => true, // For defense
+            _ => false
+        };
+    }
+
+    private bool CanDiscardSelected()
+    {
+        if (!isPlayerTurn || selectedCards.Count == 0) return false;
+
+        var selectedCardObjects = currentPlayerHand
+            .Where(c => selectedCards.Contains(c.Id))
+            .ToList();
+
+        // Single card discard (any type)
+        if (selectedCards.Count == 1) return true;
+
+        // All selected cards must be numbers
+        if (!selectedCardObjects.All(c => c.Type == CardType.Number)) return false;
+
+        // Two identical numbers
+        if (selectedCards.Count == 2)
+        {
+            var values = selectedCardObjects.Select(c => c.Value).ToList();
+            return values[0] == values[1];
+        }
+
+        // Three or more numbers - check for valid addition equation
+        if (selectedCards.Count >= 3)
+        {
+            return CanFormValidAddition(selectedCardObjects);
+        }
+
+        return false;
+    }
+
+    private bool CanEndTurn()
+    {
+        if (!isPlayerTurn) return false;
+
+        // Player must have 5 cards to end turn
+        return currentPlayerHand.Count == 5;
+    }
+
+    private bool IsBeingAttacked => isBeingAttacked;
+
+    private bool HasDefenseCard()
+    {
+        return HasDragonCard() || HasWandCard();
+    }
+
+    private bool HasDragonCard()
+    {
+        return currentPlayerHand.Any(c => c.Type == CardType.Dragon);
+    }
+
+    private bool HasWandCard()
+    {
+        return currentPlayerHand.Any(c => c.Type == CardType.Wand);
+    }
+
+    private bool CanFormValidAddition(List<CardDto> cards)
+    {
+        // Check if selected numbers can form a valid addition equation
+        // where one number equals the sum of the others
+        var numbers = cards.Select(c => c.Value).ToList();
+
+        // Try all combinations where one number is the sum
+        for (int i = 0; i < numbers.Count; i++)
+        {
+            var sum = numbers[i];
+            var remaining = numbers.Where((_, idx) => idx != i).ToList();
+
+            // Check if remaining numbers can sum to this value
+            if (remaining.Sum() == sum)
+                return true;
+        }
+
+        return false;
+    }
+
+    private string GetPlayButtonTooltip()
+    {
+        if (!CanPlaySelectedCard())
+        {
+            if (selectedCards.Count != 1) return "Select exactly one card to play";
+
+            var card = currentPlayerHand.FirstOrDefault(c => c.Id == selectedCards.First());
+            return card?.Type switch
+            {
+                CardType.King => "Select a sleeping queen to awaken",
+                CardType.Knight => "Select an opponent with queens to steal from",
+                CardType.SleepingPotion => "Select an opponent with queens to put to sleep",
+                _ => "Cannot play this card"
+            };
+        }
+        return "Play selected card";
+    }
+
+    private string GetDiscardButtonTooltip()
+    {
+        if (!CanDiscardSelected())
+        {
+            if (selectedCards.Count == 0) return "Select cards to discard";
+
+            if (selectedCards.Count == 1) return "Ready to discard single card";
+
+            if (selectedCards.Count == 2)
+                return "Can only discard two identical number cards";
+
+            return "Selected numbers must form a valid addition equation";
+        }
+
+        return selectedCards.Count == 1 ? "Discard single card" : "Discard selected cards";
+    }
+
+    // ========== GAME ACTIONS ==========
+    private async Task PlaySelectedCard()
+    {
+        if (!CanPlaySelectedCard() || !_currentGameId.HasValue) return;
+
+        var cardId = selectedCards.First();
+        var request = new PlayCardRequest
+        {
+            GameId = _currentGameId.Value,
+            CardId = cardId,
+            TargetPlayerId = selectedPlayerId,
+            TargetQueenId = selectedQueenId
+        };
+
+        var response = await SignalRService.PlayCardAsync(request);
+        if (!response.Success)
+        {
+            lastErrorMessage = response.ErrorMessage ?? "Failed to play card";
+        }
+        else
+        {
+            actionStatus = "Card played successfully!";
         }
     }
 
     private async Task DiscardSelected()
     {
-        if (!isPlayerTurn || selectedCards.Count == 0 || !_currentGameId.HasValue) return;
+        if (!CanDiscardSelected() || !_currentGameId.HasValue) return;
 
-        // You'll need to implement discard functionality in your GameEngine
-        // For now, just clear selection
-        selectedCards.Clear();
-        StateHasChanged();
+        // TODO: Implement discard API call
+        // This will depend on your server implementation
+        var response = await SignalRService.DiscardCardsAsync(_currentGameId.Value, selectedCards);
+        if (!response.Success)
+        {
+            lastErrorMessage = response.ErrorMessage ?? "Failed to discard cards";
+        }
+        else
+        {
+            actionStatus = "Cards discarded successfully!";
+        }
     }
 
+    private async Task EndTurn()
+    {
+        if (!CanEndTurn() || !_currentGameId.HasValue) return;
+
+        var response = await SignalRService.EndTurnAsync(_currentGameId.Value);
+        if (!response.Success)
+        {
+            lastErrorMessage = response.ErrorMessage ?? "Failed to end turn";
+        }
+        else
+        {
+            actionStatus = "Turn ended!";
+        }
+    }
+
+    private async Task DrawCard()
+    {
+        if (!isPlayerTurn || !_currentGameId.HasValue) return;
+
+        // Only allow drawing if hand has less than 5 cards
+        if (currentPlayerHand.Count >= 5)
+        {
+            actionStatus = "You already have 5 cards!";
+            return;
+        }
+
+        var response = await SignalRService.DrawCardAsync(_currentGameId.Value);
+        if (!response.Success)
+        {
+            lastErrorMessage = response.ErrorMessage ?? "Failed to draw card";
+        }
+    }
+
+    private async Task PlayDragon()
+    {
+        if (!isBeingAttacked || !HasDragonCard() || !_currentGameId.HasValue) return;
+
+        // TODO: Implement dragon defense API
+        actionStatus = "Playing Dragon to defend!";
+    }
+
+    private async Task PlayWand()
+    {
+        if (!isBeingAttacked || !HasWandCard() || !_currentGameId.HasValue) return;
+
+        // TODO: Implement wand defense API
+        actionStatus = "Playing Wand to defend!";
+    }
+
+    // ========== HELPER METHODS ==========
     private async Task SendChatMessage()
     {
         if (!string.IsNullOrWhiteSpace(chatMessage) && _currentGameId.HasValue)
@@ -466,19 +874,6 @@ else
         Navigation.NavigateTo($"/lobby/{GameCode}");
     }
 
-    private async Task ScrollChatToBottom()
-    {
-        try
-        {
-            await chatMessagesContainer.FocusAsync();
-        }
-        catch
-        {
-            // Ignore focus errors
-        }
-    }
-
-    // Helper methods for UI
     private string GetPhaseBadgeClass()
     {
         return gameState?.Game?.Phase switch
@@ -491,50 +886,26 @@ else
         };
     }
 
-    private string GetCardClass(CardDto card)
+    private void ToggleChatModal()
     {
-        var classes = new List<string> { "game-card" };
-
-        if (selectedCards.Contains(card.Id))
-            classes.Add("selected");
-
-        classes.Add($"card-{card.Type.ToString().ToLower()}");
-
-        return string.Join(" ", classes);
+        showChatModal = !showChatModal;
     }
 
-    private string GetCardEmoji(CardType type)
+
+    private async Task HandleGameStateUpdatedAsync(GameStateDto newState)
     {
-        return type switch
+        await InvokeAsync(() =>
         {
-            CardType.King => "👑",
-            CardType.Knight => "⚔️",
-            CardType.Dragon => "🐉",
-            CardType.SleepingPotion => "🧪",
-            CardType.Jester => "🃏",
-            CardType.Number => "🔢",
-            CardType.Queen => "👸",
-            _ => "🃏"
-        };
+            UpdateGameState(newState);
+            selectedCards.Clear();
+            selectedQueenId = null;
+            selectedPlayerId = null;
+            actionStatus = string.Empty;
+            StateHasChanged();
+        });
     }
 
-    private string GetQueenEmoji(string queenType)
-    {
-        return queenType switch
-        {
-            "Rose Queen" => "🌹",
-            "Cat Queen" => "🐱",
-            "Dog Queen" => "🐶",
-            "Peacock Queen" => "🦚",
-            "Rainbow Queen" => "🌈",
-            "Moon Queen" => "🌙",
-            "Sun Queen" => "☀️",
-            "Star Queen" => "⭐",
-            "Cake Queen" => "🍰",
-            "Heart Queen" => "❤️",
-            _ => "👑"
-        };
-    }
+
 
     private class ChatMessageDisplay
     {

@@ -33,7 +33,7 @@
     max-width: 600px;
     width: 100%;
     margin-bottom: 40px;
-    visibility:hidden;
+    visibility: hidden;
 }
 
 /* Action buttons fixed to lower left */
@@ -90,126 +90,174 @@
 .card {
     width: 120px;
     height: 168px;
-    border-radius: 8px;
-    border: 2px solid #333;
-    overflow: hidden;
-    position: relative;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    border-radius: 10px;
+    border: 3px solid transparent;
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
 }
 
-    .card:hover {
+    /*.card:hover {
         transform: translateY(-5px);
         box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    }
-
-    .card.selected {
-        border-color: #007bff;
-        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
-    }
-
-    .card .card-content {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-    }
-
-    .card .card-header {
-        font-size: 2rem;
-        text-align: center;
-        line-height: 1;
-    }
-
-    .card .card-body {
-        text-align: center;
-    }
-
-    .card .card-name {
-        font-size: 0.9rem;
-        font-weight: bold;
-        margin-bottom: 4px;
-        color: #333;
-    }
-
-    .card .card-value {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #333;
-        line-height: 1;
-    }
-
-    /* King-specific styles */
-    .card[style*="bubble gum"] {
-        border-color: #ff6b9d;
-    }
-
-    .card[style*="chess"] {
-        border-color: #2d3436;
-    }
-
-    .card[style*="cookie"] {
-        border-color: #d35400;
-    }
-
-    .card[style*="fire"] {
-        border-color: #e74c3c;
-    }
-
-    .card[style*="hat"] {
-        border-color: #8e44ad;
-    }
-
-    .card[style*="puzzle"] {
-        border-color: #1abc9c;
-    }
-
-    .card[style*="tie-dye"] {
-        border: 2px solid;
-        border-image: linear-gradient(45deg, #ff9ff3, #f368e0, #ff9ff3, #f368e0) 1;
-    }
-
-    .card[style*="turtle"] {
-        border-color: #00b894;
-    }
-
-    /* Knight-specific styles */
-    .card[style*="black knight"] {
-        border-color: #2d3436;
-    }
-
-    .card[style*="blue knight"] {
-        border-color: #3498db;
-    }
-
-    .card[style*="green knight"] {
-        border-color: #27ae60;
-    }
-
-    .card[style*="red knight"] {
-        border-color: #e74c3c;
-    }
-
-    /* Special hover effects for distinct cards */
+    }*/
     .card:hover {
         transform: translateY(-5px) rotate(1deg);
         box-shadow: 0 10px 20px rgba(0,0,0,0.2);
     }
 
-    /* King cards get extra shine */
-    .card[style*="king"]:hover {
-        box-shadow: 0 10px 20px rgba(255, 215, 0, 0.3);
+    .card.selected {
+        border-color: #007bff !important;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5), 0 6px 12px rgba(0, 0, 0, 0.3);
+        transform: translateY(-5px);
+        z-index: 10;
     }
 
-    /* Knight cards get metallic shine */
-    .card[style*="knight"]:hover {
-        box-shadow: 0 10px 20px rgba(192, 192, 192, 0.3);
+        /* Glow effect for selected cards */
+        .card.selected::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border-radius: 14px;
+            background: linear-gradient(45deg, #007bff, #00d4ff);
+            z-index: -1;
+            opacity: 0.3;
+            animation: pulse 2s infinite;
+        }
+
+    /* Clickable state */
+    .card:not(.face-down):hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
     }
+
+    /* Disabled state */
+    .card:not(.clickable) {
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+
+    /* Face down cards */
+    .card.face-down {
+        background-color: #2c3e50;
+        background-image: linear-gradient(135deg, #34495e 25%, transparent 25%), linear-gradient(225deg, #34495e 25%, transparent 25%), linear-gradient(45deg, #34495e 25%, transparent 25%), linear-gradient(315deg, #34495e 25%, transparent 25%);
+        background-position: 10px 0, 10px 0, 0 0, 0 0;
+        background-size: 20px 20px;
+        border: 3px solid #1a252f;
+    }
+
+/* Card content area */
+.card-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    padding: 10px;
+    box-sizing: border-box;
+    font-weight: bold;
+}
+
+/* Card value display */
+.card-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+}
+
+/* Card type indicator */
+.card-type {
+    font-size: 0.9rem;
+    margin-top: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Animation for selected cards */
+@keyframes pulse {
+    0% {
+        opacity: 0.3;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+
+    100% {
+        opacity: 0.3;
+    }
+}
+
+/* King-specific styles */
+.card[style*="bubble gum"] {
+    border-color: #ff6b9d;
+}
+
+.card[style*="chess"] {
+    border-color: #2d3436;
+}
+
+.card[style*="cookie"] {
+    border-color: #d35400;
+}
+
+.card[style*="fire"] {
+    border-color: #e74c3c;
+}
+
+.card[style*="hat"] {
+    border-color: #8e44ad;
+}
+
+.card[style*="puzzle"] {
+    border-color: #1abc9c;
+}
+
+.card[style*="tie-dye"] {
+    border: 2px solid;
+    border-image: linear-gradient(45deg, #ff9ff3, #f368e0, #ff9ff3, #f368e0) 1;
+}
+
+.card[style*="turtle"] {
+    border-color: #00b894;
+}
+
+/* Knight-specific styles */
+.card[style*="black knight"] {
+    border-color: #2d3436;
+}
+
+.card[style*="blue knight"] {
+    border-color: #3498db;
+}
+
+.card[style*="green knight"] {
+    border-color: #27ae60;
+}
+
+.card[style*="red knight"] {
+    border-color: #e74c3c;
+}
+
+/* King cards get extra shine */
+.card[style*="king"]:hover {
+    box-shadow: 0 10px 20px rgba(255, 215, 0, 0.3);
+}
+
+/* Knight cards get metallic shine */
+.card[style*="knight"]:hover {
+    box-shadow: 0 10px 20px rgba(192, 192, 192, 0.3);
+}
 
 /* ========== QUEEN DISPLAY COMPONENT ========== */
 .queen-display {
@@ -246,64 +294,12 @@
         opacity: 0.8;
     }
 
-    .queen-display .queen-content {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-        padding: 10px;
-        background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%);
-        color: white;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-    }
-
-    .queen-display .queen-name {
-        font-size: 0.85rem;
-        font-weight: bold;
-        text-align: center;
-        margin-bottom: 4px;
-        line-height: 1.1;
-    }
-
-    .queen-display .queen-value {
-        font-size: 1.2rem;
-        font-weight: bold;
-        text-align: center;
-        color: #ffd700;
-    }
-
     /* Small queen token version */
     .queen-display.queen-token {
         width: 50px;
         height: 50px;
         border-radius: 50%;
     }
-
-        .queen-display.queen-token .queen-content {
-            justify-content: center;
-            padding: 5px;
-            background: rgba(0, 0, 0, 0.5);
-        }
-
-        .queen-display.queen-token .queen-name {
-            display: none; /* Hide name on tokens */
-        }
-
-        .queen-display.queen-token .queen-value {
-            font-size: 0.8rem;
-            position: absolute;
-            bottom: -8px;
-            right: -8px;
-            background: #333;
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
 
 /* AI Players Section */
 .ai-players-section {
@@ -412,48 +408,6 @@
     flex-wrap: wrap;
 }
 
-.deck-area {
-    display: flex;
-    gap: 30px;
-    margin: 20px 0;
-}
-
-.deck, .discard {
-    width: 100px;
-    height: 140px;
-    border-radius: 8px;
-    border: 2px solid #333;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    background-size: cover;
-    background-position: center;
-    color: white;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-    transition: transform 0.2s;
-}
-
-    .deck:hover {
-        transform: translateY(-3px);
-    }
-
-.deck {
-    background-image: url('/images/cards/back.png');
-}
-
-.discard {
-    background-image: url('/images/cards/back.png');
-    opacity: 0.9;
-}
-
-.deck-count, .discard-count {
-    font-size: 1.8rem;
-    margin-bottom: 5px;
-}
-
 /* Card back states */
 .card-back {
     background-image: url('/images/cards/back.png') !important;
@@ -546,6 +500,500 @@
     z-index: 1040; /* Standard Bootstrap backdrop z-index */
 }
 
+/* ========== GAME LAYOUT ========== */
+.game-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 1px;
+    gap: 1px;
+}
+
+/* ========== HEADER ========== */
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 5px;
+}
+
+.target-score, .game-code {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.score-label, .code-label {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 2px;
+}
+
+.score-value, .code-value {
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.turn-indicator {
+    padding: 8px 10px;
+    border-radius: 20px;
+    font-weight: bold;
+    min-width: 200px;
+    text-align: center;
+}
+
+    .turn-indicator.player-turn {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+        animation: pulse-glow 2s infinite;
+    }
+
+    .turn-indicator.opponent-turn {
+        background: #6c757d;
+        color: white;
+    }
+
+.game-status .status-badge {
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+/* ========== OPPONENT AREA ========== */
+.opponent-area {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.opponent-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 5px;
+    overflow-x: auto;
+}
+
+.opponent-tab {
+    flex: 1;
+    min-width: 150px;
+    max-width: 200px;
+    padding: 10px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+}
+
+    .opponent-tab:hover {
+        border-color: #007bff;
+        transform: translateY(-2px);
+    }
+
+    .opponent-tab.active {
+        border-color: #007bff;
+        background: #007bff;
+        color: white;
+    }
+
+.opponent-name {
+    font-weight: bold;
+    margin-right: 5px;
+    font-size: 0.9rem;
+}
+
+.opponent-stats {
+    font-size: 0.8rem;
+    display: flex;
+    gap: 3px;
+}
+
+.stat-value {
+    font-weight: bold;
+    margin-left: 2px;
+}
+
+.opponent-details {
+    display: flex;
+    gap: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+}
+
+.opponent-cards, .opponent-queens {
+    flex: 1;
+}
+
+    .opponent-cards h6, .opponent-queens h6 {
+        text-align: center;
+        margin-bottom: 10px;
+        color: #495057;
+    }
+
+.cards-row, .queens-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* ========== SLEEPING QUEENS ========== */
+.sleeping-queens-section {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.section-title {
+    text-align: center;
+    color: #495057;
+    margin-bottom: 15px;
+}
+
+.sleeping-queens-grid {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+/* ========== DECK & DISCARD ========== */
+.deck-area {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.95);
+    margin: 0px 15px;
+}
+
+.deck, .discard {
+    width: 100px;
+    height: 140px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    border-radius: 8px;
+    border: 2px solid #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-size: cover;
+    background-position: center;
+    color: white;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    transition: transform 0.2s;
+}
+
+    .deck:hover {
+        transform: translateY(-3px);
+    }
+
+.deck {
+    background-image: url('/images/cards/back.png');
+}
+
+.discard {
+    opacity: 0.9;
+}
+
+/* ========== PLAYER AREA ========== */
+.player-area {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 5px;
+}
+
+.player-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.player-info-left h4 {
+    margin: 0;
+    color: #333;
+}
+
+.selected-count {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.count-badge {
+    background: #007bff;
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.count-label {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.player-score {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.action-buttons-row {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.action-btn {
+    align-items: center;
+    min-width: 140px;
+}
+
+.btn-icon {
+    font-size: 1.2rem;
+}
+
+.btn-text {
+    font-weight: bold;
+}
+
+.defense-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding-left: 20px;
+    border-left: 2px solid #ffc107;
+}
+
+.player-content {
+    display: flex;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.player-cards, .player-queens {
+    flex: 1;
+}
+
+    .player-cards h6, .player-queens h6 {
+        text-align: center;
+        color: #495057;
+        margin-bottom: 15px;
+    }
+
+.cards-grid, .queens-grid {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.action-status {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+/* ========== FOOTER ========== */
+.game-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 5px;
+}
+
+.chat-preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 8px 15px;
+    max-width: 25%;
+    border-radius: 20px;
+    background: #f8f9fa;
+    transition: all 0.3s;
+}
+
+    .chat-preview:hover {
+        background: #e9ecef;
+    }
+
+.latest-message {
+    flex: 1;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-container {
+    flex: 1;
+}
+
+.sender {
+    font-weight: bold;
+    color: #007bff;
+    margin-right: 5px;
+}
+
+.message {
+    color: #495057;
+}
+
+.no-messages {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.chat-toggle {
+    padding: 2px 8px;
+    font-size: 1.2rem;
+}
+
+.chat-input {
+    flex: 1;
+    display: flex;
+    gap: 10px;
+    max-width: 400px;
+}
+
+.chat-box {
+    flex: 1;
+}
+
+/* ========== CHAT MODAL ========== */
+.chat-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1050;
+}
+
+.chat-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px;
+    max-width: 90%;
+    background: white;
+    border-radius: 10px;
+    z-index: 1060;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #dee2e6;
+    background: #f8f9fa;
+    border-radius: 10px 10px 0 0;
+}
+
+.chat-modal-body {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+}
+
+    .chat-modal-body .chat-message {
+        margin-bottom: 10px;
+        padding: 8px 12px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        border-left: 3px solid #007bff;
+    }
+
+/* ========== ANIMATIONS ========== */
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(40, 167, 69, 0.5);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(40, 167, 69, 0.8);
+    }
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 1200px) {
+    .player-content {
+        flex-direction: column;
+    }
+
+    .opponent-details {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 768px) {
+    .game-layout {
+        padding: 5px;
+        gap: 5px;
+    }
+
+    .header-center {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .action-buttons-row {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .action-btn {
+        width: 100%;
+        max-width: 250px;
+    }
+
+    .game-footer {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .chat-input {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .player-header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .modal-xl {
@@ -608,5 +1056,29 @@
 
     .queens-grid {
         justify-content: center;
+    }
+}
+@media (max-width: 768px) {
+    .card {
+        width: 100px;
+        height: 150px;
+    }
+
+        .card.selected::before {
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            bottom: -5px;
+        }
+}
+
+@media (max-width: 576px) {
+    .card {
+        width: 80px;
+        height: 120px;
+    }
+
+    .card-value {
+        font-size: 2rem;
     }
 }

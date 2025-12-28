@@ -11,6 +11,12 @@ public class Player
     public int Score { get; set; }
     public bool IsCurrentTurn { get; set; }
     public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+    public bool IsAI { get; set; } = false;
+    public AILevel AILevel { get; set; } = AILevel.Medium;
+    public bool IsConnected { get; set; }
+    public DateTime? LastDisconnectedAt { get; set; }
+    public DateTime? LastReconnectedAt { get; set; }
+    public bool IsAIControlled { get; set; } // For when AI takes over during disconnect
 
     // Navigation properties
     public Guid GameId { get; set; }

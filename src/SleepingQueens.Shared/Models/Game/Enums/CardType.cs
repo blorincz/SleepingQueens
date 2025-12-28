@@ -10,6 +10,7 @@ public enum CardType
     Knight = 3,
     Dragon = 4,
     SleepingPotion = 5,
-    Jester = 6,
-    Number = 7
+    Wand = 6,
+    Jester = 7,
+    Number = 8
 }

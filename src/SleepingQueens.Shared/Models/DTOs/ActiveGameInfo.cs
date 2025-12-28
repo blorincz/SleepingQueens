@@ -10,4 +10,8 @@ public class ActiveGameInfo
     public int MaxPlayers { get; set; }
     public GameStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public bool CanJoin { get; set; }
+    public TimeSpan? TimeRemaining { get; set; }
+    public string GameMode { get; set; } = string.Empty;
 }

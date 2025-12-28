@@ -150,6 +150,40 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
     // ========== CARD OPERATIONS ==========
 
+    public async Task<IEnumerable<Card>> GetCardByTypeAsync(CardType type)
+    {
+        return await _context.Cards
+            .Where(c => c.Type == type)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Card>> GetNumberCardsAsync()
+    {
+        return await _context.Cards
+            .Where(c => c.Type == CardType.Number)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Card>> GetSpecialCardsAsync()
+    {
+        return await _context.Cards
+            .Where(c => c.Type != CardType.Number && c.Type != CardType.Queen)
+            .ToListAsync();
+    }
+
+    public async Task<Card?> GetCardByValueAsync(CardType type, int value)
+    {
+        return await _context.Cards
+            .FirstOrDefaultAsync(c => c.Type == type && c.Value == value);
+    }
+
+    public async Task<IEnumerable<Card>> GetCardsByIdsAsync(IEnumerable<Guid> cardIds)
+    {
+        return await _context.Cards
+            .Where(c => cardIds.Contains(c.Id))
+            .ToListAsync();
+    }
+
     public async Task<IEnumerable<Card>> GetPlayerHandAsync(Guid playerId)
     {
         return await _context.PlayerCards
@@ -391,120 +425,41 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
 
     public async Task InitializeNewGameAsync(Game game, Player firstPlayer)
     {
-        var executionStrategy = _context.Database.CreateExecutionStrategy();
-
-        await executionStrategy.ExecuteAsync(async () =>
+        // Draw initial hand for first player (5 cards)
+        for (int i = 0; i < 5; i++)
         {
-            //using var transaction = await _context.Database.BeginTransactionAsync();
+            var card = await _context.GameCards
+            .Include(gc => gc.Card)
+            .Where(gc => gc.GameId == game.Id && gc.Location == CardLocation.Deck)
+            .OrderBy(gc => gc.Position)
+            .FirstOrDefaultAsync();
 
-            try
+            if (card != null)
             {
-                // Add game
-                _context.Games.Add(game);
+                _context.GameCards.Remove(card);
                 await _context.SaveChangesAsync();
-
-                // Get all standard cards (non-queens)
-                var cards = await _context.Cards
-                    .Where(c => c.Type != CardType.Queen)
-                    .ToListAsync();
-
-                // Add cards to deck
-                var random = new Random();
-                var shuffledCards = cards.OrderBy(c => random.Next()).ToList();
-
-                for (int i = 0; i < shuffledCards.Count; i++)
-                {
-                    var gameCard = new GameCard
-                    {
-                        GameId = game.Id,
-                        CardId = shuffledCards[i].Id,
-                        Position = i,
-                        Location = CardLocation.Deck
-                    };
-                    _context.GameCards.Add(gameCard);
-                }
-
-                await _context.SaveChangesAsync();
-
-                // Get all queen cards
-                var queenCards = await _context.Cards
-                    .Where(c => c.Type == CardType.Queen)
-                    .ToListAsync();
-
-                // Add queens to sleeping pool
-                foreach (var queenCard in queenCards)
-                {
-                    var queenType = queenCard.Name switch
-                    {
-                        "Rose Queen" => QueenType.RoseQueen,
-                        "Cat Queen" => QueenType.CatQueen,
-                        "Dog Queen" => QueenType.DogQueen,
-                        "Peacock Queen" => QueenType.PeacockQueen,
-                        "Rainbow Queen" => QueenType.RainbowQueen,
-                        "Moon Queen" => QueenType.MoonQueen,
-                        "Sunflower Queen" => QueenType.SunflowerQueen,
-                        "Starfish Queen" => QueenType.StarfishQueen,
-                        "Cake Queen" => QueenType.CakeQueen,
-                        "Heart Queen" => QueenType.HeartQueen,
-                        "Pancake Queen" => QueenType.PancakeQueen,
-                        "Ladybug Queen" => QueenType.LadybugQueen,
-                        _ => QueenType.RoseQueen
-                    };
-
-                    var queen = new Queen
-                    {
-                        GameId = game.Id,
-                        Name = queenCard.Name,
-                        PointValue = queenCard.Value,
-                        ImagePath = queenCard.ImagePath,
-                        IsAwake = false,
-                        Type = queenType
-                    };
-                    _context.Queens.Add(queen);
-                }
-
-                // Draw initial hand for first player (5 cards)
-                for (int i = 0; i < 5; i++)
-                {
-                    var card = await _context.GameCards
-                    .Include(gc => gc.Card)
-                    .Where(gc => gc.GameId == game.Id && gc.Location == CardLocation.Deck)
-                    .OrderBy(gc => gc.Position)
-                    .FirstOrDefaultAsync();
-
-                    if (card != null)
-                    {
-                        _context.GameCards.Remove(card);
-                        await _context.SaveChangesAsync();
-                    }
-
-                    //var gameCard = await DrawCardFromDeckAsync(game.Id);
-                    if (card != null)
-                    {
-                        await AddCardToPlayerHandAsync(firstPlayer.Id, card.CardId);
-                    }
-                }
-
-                // Record initial move
-                var initialMove = new Move
-                {
-                    GameId = game.Id,
-                    PlayerId = firstPlayer.Id,
-                    Type = MoveType.DrawCard,
-                    Description = $"Initial hand drawn for {firstPlayer.Name}",
-                    TurnNumber = 1,
-                    Timestamp = DateTime.UtcNow
-                };
-                await RecordMoveAsync(initialMove);
-
-                //await transaction.CommitAsync();
             }
-            catch
+
+            //var gameCard = await DrawCardFromDeckAsync(game.Id);
+            if (card != null)
             {
-                //await transaction.RollbackAsync();
-                throw;
+                await AddCardToPlayerHandAsync(firstPlayer.Id, card.CardId);
             }
-        });
+        }
+
+        // Record initial move
+        var initialMove = new Move
+        {
+            GameId = game.Id,
+            PlayerId = firstPlayer.Id,
+            Type = MoveType.DrawCard,
+            Description = $"Initial hand drawn for {firstPlayer.Name}",
+            TurnNumber = 1,
+            Timestamp = DateTime.UtcNow
+        };
+        await RecordMoveAsync(initialMove);
+
+        //await transaction.CommitAsync();
     }
 
     public async Task ShuffleDeckAsync(Guid gameId)
@@ -551,5 +506,92 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
         var game = await GetByIdAsync(gameId) ?? throw new ArgumentException($"Game with ID {gameId} not found");
         game.Settings = settings;
         await _context.SaveChangesAsync();
+    }
+
+    public async Task InitializeDeckAsync(Guid gameId, GameSettings settings)
+    {
+        // Get all standard cards (non-queens)
+        var cards = await _context.Cards
+            .Where(c => c.Type != CardType.Queen)
+            .ToListAsync();
+
+        // Add cards to deck
+        var random = new Random();
+        var shuffledCards = cards.OrderBy(c => random.Next()).ToList();
+
+        for (int i = 0; i < shuffledCards.Count; i++)
+        {
+            var gameCard = new GameCard
+            {
+                GameId = gameId,
+                CardId = shuffledCards[i].Id,
+                Position = i,
+                Location = CardLocation.Deck
+            };
+            _context.GameCards.Add(gameCard);
+        }
+
+        await _context.SaveChangesAsync();
+    }
+
+    Task<List<GameCard>> IGameRepository.GetPlayerHandAsync(Guid playerId)
+    {
+        throw new NotImplementedException();
+    }
+
+    Task<List<GameCard>> IGameRepository.GetDiscardPileAsync(Guid gameId)
+    {
+        throw new NotImplementedException();
+    }
+
+    Task<List<GameCard>> IGameRepository.GetDeckCardsAsync(Guid gameId)
+    {
+        throw new NotImplementedException();
+    }
+
+    Task<IEnumerable<Card>> IGameRepository.GetByTypeAsync(CardType type)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task PlaceSleepingQueensAsync(Guid gameId, GameSettings settings)
+    {
+        // Get all queen cards
+        var queenCards = await _context.Cards
+            .Where(c => c.Type == CardType.Queen)
+            .ToListAsync();
+
+        // Add queens to sleeping pool
+        foreach (var queenCard in queenCards)
+        {
+            var queenType = queenCard.Name switch
+            {
+                "Rose Queen" => QueenType.RoseQueen,
+                "Cat Queen" => QueenType.CatQueen,
+                "Dog Queen" => QueenType.DogQueen,
+                "Peacock Queen" => QueenType.PeacockQueen,
+                "Rainbow Queen" => QueenType.RainbowQueen,
+                "Moon Queen" => QueenType.MoonQueen,
+                "Sunflower Queen" => QueenType.SunflowerQueen,
+                "Starfish Queen" => QueenType.StarfishQueen,
+                "Cake Queen" => QueenType.CakeQueen,
+                "Heart Queen" => QueenType.HeartQueen,
+                "Pancake Queen" => QueenType.PancakeQueen,
+                "Ladybug Queen" => QueenType.LadybugQueen,
+                _ => QueenType.RoseQueen
+            };
+
+            var queen = new Queen
+            {
+                GameId = gameId,
+                Name = queenCard.Name,
+                PointValue = queenCard.Value,
+                ImagePath = queenCard.ImagePath,
+                IsAwake = false,
+                Type = queenType
+            };
+            _context.Queens.Add(queen);
+            await _context.SaveChangesAsync();
+        }
     }
 }

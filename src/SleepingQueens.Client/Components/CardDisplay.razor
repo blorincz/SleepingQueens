@@ -2,7 +2,7 @@
 @using SleepingQueens.Shared.Models.Game.Enums
 
 
-<div class="card @AdditionalClasses"
+<div class="card @AdditionalClasses @(IsSelected ? "selected" : "")"
      style="@CardStyle"
      @onclick="HandleClick"
      title="@ComputedTitle">

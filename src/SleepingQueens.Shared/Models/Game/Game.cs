@@ -16,6 +16,7 @@ public class Game
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
+    public bool IsPrivate { get; set; }
 
     // Game Settings as JSON
     [Column(TypeName = "nvarchar(max)")]

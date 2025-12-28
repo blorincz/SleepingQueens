@@ -8,6 +8,8 @@ public interface IGameRepository
 {
     // Game operations
     Task<Game?> GetByIdAsync(Guid id);
+    Task UpdateAsync(Game game);
+    Task<Game> AddAsync(Game game);
     Task<Game?> GetByCodeAsync(string code);
     Task<IEnumerable<Game>> GetActiveGamesAsync();
     Task<IEnumerable<Game>> GetGamesByStatusAsync(GameStatus status);
@@ -23,16 +25,23 @@ public interface IGameRepository
     Task<IEnumerable<Player>> GetPlayersInGameAsync(Guid gameId);
 
     // Card operations
-    Task<IEnumerable<Card>> GetPlayerHandAsync(Guid playerId);
+    Task InitializeDeckAsync(Guid gameId, GameSettings settings);
+    Task<GameCard?> DrawCardFromDeckAsync(Guid gameId);
     Task AddCardToPlayerHandAsync(Guid playerId, Guid cardId);
     Task RemoveCardFromPlayerHandAsync(Guid playerId, Guid cardId);
-    Task<GameCard?> DrawCardFromDeckAsync(Guid gameId);
-    Task ReturnCardToDeckAsync(Guid gameId, Guid cardId);
+    Task<List<GameCard>> GetPlayerHandAsync(Guid playerId);
     Task DiscardCardAsync(Guid gameId, Guid cardId);
-    Task<IEnumerable<GameCard>> GetDeckCardsAsync(Guid gameId);
-    Task<IEnumerable<GameCard>> GetDiscardPileAsync(Guid gameId);
+    Task<List<GameCard>> GetDiscardPileAsync(Guid gameId);
+    Task<List<GameCard>> GetDeckCardsAsync(Guid gameId);
+    Task<IEnumerable<Card>> GetByTypeAsync(CardType type);
+    Task<IEnumerable<Card>> GetNumberCardsAsync();
+    Task<IEnumerable<Card>> GetSpecialCardsAsync();
+    Task<Card?> GetCardByValueAsync(CardType type, int value);
+    Task<IEnumerable<Card>> GetCardsByIdsAsync(IEnumerable<Guid> cardIds);
+    Task ReturnCardToDeckAsync(Guid gameId, Guid cardId);
 
     // Queen operations
+    Task PlaceSleepingQueensAsync(Guid gameId, GameSettings settings);
     Task<IEnumerable<Queen>> GetSleepingQueensAsync(Guid gameId);
     Task<IEnumerable<Queen>> GetPlayerQueensAsync(Guid playerId);
     Task<IEnumerable<Queen>> GetQueensForGameAsync(Guid gameId);
@@ -53,5 +62,5 @@ public interface IGameRepository
     Task<bool> CheckForWinnerAsync(Guid gameId);
     Task EndGameAsync(Guid gameId, Guid? winnerId = null);
     Task UpdateGameSettingsAsync(Guid gameId, GameSettings settings);
-    Task UpdateAsync(Game game);
+    
 }

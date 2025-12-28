@@ -9,10 +9,8 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork
     private IDbContextTransaction? _transaction;
 
     private IGameRepository? _games;
-    private ICardRepository? _cards;
 
     public IGameRepository Games => _games ??= new GameRepository(_context);
-    public ICardRepository Cards => _cards ??= new CardRepository(_context);
 
     public async Task<int> CompleteAsync()
     {

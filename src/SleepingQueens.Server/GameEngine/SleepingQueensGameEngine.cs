@@ -1,32 +1,127 @@
-﻿using System.Text.Json;
-using SleepingQueens.Data.Repositories; // IGameRepository, ICardRepository
-using SleepingQueens.Shared.Models.DTOs;       // DTOs
-using SleepingQueens.Shared.Models.Game;       // Domain models
+﻿using Microsoft.EntityFrameworkCore;
 using SleepingQueens.Data.Mapping;
+using SleepingQueens.Data.Repositories;
+using SleepingQueens.Server.Logging;
+using SleepingQueens.Shared.Models.DTOs;
+using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
-using SleepingQueens.Server.Logging;           // GameStateMapper
+using System.Text.Json;
 
 namespace SleepingQueens.Server.GameEngine;
 
 public class SleepingQueensGameEngine(
     IGameRepository gameRepository,
-    ICardRepository cardRepository,
     ILogger<SleepingQueensGameEngine> logger) : IGameEngine
 {
     private readonly IGameRepository _gameRepository = gameRepository;
-    private readonly ICardRepository _cardRepository = cardRepository;
     private readonly ILogger<SleepingQueensGameEngine> _logger = logger;
 
     // ========== GAME LIFECYCLE ==========
 
-    public Game CreateGame(GameSettings settings, Player creator)
+    public async Task<ActiveGamesResult> GetActiveGamesAsync()
+    {
+        try
+        {
+            var games = await _gameRepository.GetActiveGamesAsync();
+            var filteredGames = ApplyGameVisibilityRules(games);
+            var gameInfos = filteredGames.Select(g => CreateActiveGameInfo(g));
+
+            return ActiveGamesResult.SuccessResult(gameInfos);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetActiveGamesAsync");
+            return ActiveGamesResult.Error("Failed to retrieve active games");
+        }
+    }
+
+    private static IEnumerable<Game> ApplyGameVisibilityRules(IEnumerable<Game> games)
+    {
+        // Example business rules:
+        // - Hide games that have been inactive for too long
+        // - Hide private/invite-only games unless user is invited
+        // - Hide full games if player can't join
+
+        var cutoffTime = DateTime.UtcNow.AddMinutes(-30); // Hide games inactive for 30+ minutes
+
+        return games.Where(g =>
+        {
+            // Rule 1: Hide old inactive games
+            if (g.Status == GameStatus.Waiting && g.CreatedAt < cutoffTime)
+                return false;
+
+            // Rule 2: Hide completed games after some time
+            if (g.Status == GameStatus.Completed &&
+                g.EndedAt.HasValue &&
+                g.EndedAt.Value < DateTime.UtcNow.AddHours(-1))
+                return false;
+
+            // Rule 3: Always show active games
+            if (g.Status == GameStatus.Active)
+                return true;
+
+            // Rule 4: Show waiting games that aren't full (or apply other rules)
+            if (g.Status == GameStatus.Waiting && !g.IsFull())
+                return true;
+
+            return false;
+        });
+    }
+
+    private static ActiveGameInfo CreateActiveGameInfo(Game game)
+    {
+        // Apply any business logic to the info
+        var info = new ActiveGameInfo
+        {
+            GameId = game.Id,
+            GameCode = game.Code,
+            PlayerCount = game.Players.Count,
+            MaxPlayers = game.MaxPlayers,
+            Status = game.Status,
+            CreatedAt = game.CreatedAt,
+            StartedAt = game.StartedAt,
+            CanJoin = CanPlayerJoinGame(game),
+            TimeRemaining = CalculateTimeRemaining(game),
+            GameMode = DetermineGameMode(game.Settings)
+        };
+
+        return info;
+    }
+
+    private static bool CanPlayerJoinGame(Game game)
+    {
+        // Business logic: who can join this game?
+        return game.Status == GameStatus.Waiting &&
+               !game.IsFull() &&
+               !game.IsPrivate;
+    }
+
+    private static TimeSpan? CalculateTimeRemaining(Game game)
+    {
+        if (game.Status != GameStatus.Active || !game.StartedAt.HasValue)
+            return null;
+
+        // Example: 30-minute game duration
+        var gameDuration = TimeSpan.FromMinutes(30);
+        var elapsed = DateTime.UtcNow - game.StartedAt.Value;
+        var remaining = gameDuration - elapsed;
+
+        return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+    }
+
+    private static string DetermineGameMode(GameSettings settings)
+    {
+        // Business logic to determine game mode
+        if (settings.TargetScore <= 20) return "Quick Play";
+        if (settings.TargetScore >= 80) return "Marathon";
+        return "Standard";
+    }
+
+    public async Task<Game> CreateGame(GameSettings settings, Player creator)
     {
         // Validate parameters
-        if (settings == null)
-            throw new ArgumentNullException(nameof(settings));
-
-        if (creator == null)
-            throw new ArgumentNullException(nameof(creator)); // Add this check!
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(creator);
 
         // Validate settings
         if (!settings.Validate())
@@ -51,10 +146,13 @@ public class SleepingQueensGameEngine(
         // Add creator to game
         game.Players.Add(creator);
 
-        return game;
+        // Save game
+        var savedGame = await _gameRepository.AddAsync(game);
+
+        return savedGame;
     }
 
-    public async Task<Game> StartGameAsync(Guid gameId)
+    public async Task<Game> StartGameAsync(Guid gameId, Guid requestingPlayerId)
     {
         var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
         if (game.Players.Count < game.Settings.MinPlayers)
@@ -67,11 +165,49 @@ public class SleepingQueensGameEngine(
         game.Phase = GamePhase.Playing;
         game.StartedAt = DateTime.UtcNow;
 
+        // Initialize game components
+        await InitializeGameComponentsAsync(gameId, game.Settings);
+
+        // Deal initial cards to ALL players
+        await DealInitialCardsToAllPlayersAsync(gameId);
+
+        // Set first player's turn
+        if (game.Players.Count != 0)
+        {
+            await _gameRepository.UpdatePlayerTurnAsync(gameId, game.Players.ToArray()[0].Id, true);
+        }
+
         await _gameRepository.UpdateAsync(game);
 
         _logger.LogGameStarted(gameId, game.Players.Count);
 
         return game;
+    }
+
+    private async Task InitializeGameComponentsAsync(Guid gameId, GameSettings settings)
+    {
+        await _gameRepository.InitializeDeckAsync(gameId, settings);
+        await _gameRepository.PlaceSleepingQueensAsync(gameId, settings);
+    }
+
+    private async Task DealInitialCardsToAllPlayersAsync(Guid gameId)
+    {
+        const int initialHandSize = 5;
+        var players = await _gameRepository.GetPlayersInGameAsync(gameId);
+
+        foreach (var player in players)
+        {
+            for (int i = 0; i < initialHandSize; i++)
+            {
+                var drawnCard = await _gameRepository.DrawCardFromDeckAsync(gameId);
+                if (drawnCard != null)
+                {
+                    await _gameRepository.AddCardToPlayerHandAsync(player.Id, drawnCard.CardId);
+                }
+            }
+
+            _logger.LogPlayerDealtCards(player.Id, initialHandSize);
+        }
     }
 
     public async Task<Game> EndGameAsync(Guid gameId, Guid? winnerId = null)
@@ -120,29 +256,177 @@ public class SleepingQueensGameEngine(
         return addedPlayer;
     }
 
-    public async Task<Player> AddAIPlayerAsync(Guid gameId, AILevel level = AILevel.Medium)
+    public async Task<AddAIPlayerResult> AddAIPlayerAsync(Guid gameId, AILevel level, Guid requestingPlayerId)
     {
-        var player = new Player
+        try
         {
-            Name = $"AI ({level})",
-            Type = level switch
-            {
-                AILevel.Easy => PlayerType.AI_Easy,
-                AILevel.Medium => PlayerType.AI_Medium,
-                AILevel.Hard => PlayerType.AI_Hard,
-                AILevel.Expert => PlayerType.AI_Hard,
-                _ => PlayerType.AI_Medium
-            }
-        };
+            var game = await _gameRepository.GetByIdAsync(gameId);
+            if (game == null)
+                return AddAIPlayerResult.Fail("Game not found");
 
-        return await AddPlayerAsync(gameId, player);
+            // Validate requesting player is host
+            if (!IsPlayerHost(game, requestingPlayerId))
+                return AddAIPlayerResult.Fail("Only the host can add AI players");
+
+            if (game.IsFull())
+                return AddAIPlayerResult.Fail("Game is full");
+
+            var player = new Player
+            {
+                Name = $"AI ({level})",
+                Type = level switch
+                {
+                    AILevel.Easy => PlayerType.AI_Easy,
+                    AILevel.Medium => PlayerType.AI_Medium,
+                    AILevel.Hard => PlayerType.AI_Hard,
+                    _ => PlayerType.AI_Medium
+                },
+                IsAI = true,
+                AILevel = level
+            };
+
+            var addedPlayer = await _gameRepository.AddPlayerAsync(gameId, player);
+
+            // If game is already active, deal cards to this AI player
+            if (game.Status == GameStatus.Active)
+            {
+                await DealInitialCardsToPlayerAsync(gameId, addedPlayer.Id);
+            }
+
+            return AddAIPlayerResult.Ok(
+                addedPlayer.Id,
+                addedPlayer.Name,
+                game.Players.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding AI player");
+            return AddAIPlayerResult.Fail($"Error: {ex.Message}");
+        }
     }
 
-    public async Task RemovePlayerAsync(Guid gameId, Guid playerId)
+    private static bool IsPlayerHost(Game game, Guid playerId)
     {
+        var host = game.Players.OrderBy(p => p.JoinedAt).FirstOrDefault();
+        return host?.Id == playerId;
+    }
+
+    private async Task DealInitialCardsToPlayerAsync(Guid gameId, Guid playerId)
+    {
+        const int initialHandSize = 5;
+
+        for (int i = 0; i < initialHandSize; i++)
+        {
+            var drawnCard = await _gameRepository.DrawCardFromDeckAsync(gameId);
+            if (drawnCard != null)
+            {
+                await _gameRepository.AddCardToPlayerHandAsync(playerId, drawnCard.CardId);
+            }
+        }
+    }
+
+    public async Task<RemovePlayerResult> RemovePlayerAsync(Guid gameId, Guid playerIdToRemove, Guid requestingPlayerId)
+    {
+        try
+        {
+            // 1. Get data from repository
+            var game = await _gameRepository.GetByIdAsync(gameId);
+            if (game == null)
+                return RemovePlayerResult.Error("Game not found");
+
+            // 2. Business validation
+            var validationResult = ValidatePlayerRemoval(
+                game,
+                playerIdToRemove,
+                requestingPlayerId);
+
+            if (!validationResult.IsValid)
+                return RemovePlayerResult.Error(validationResult.ErrorMessage ?? "");
+
+            // 3. Business logic: Remove player from game
+            var removedPlayer = await RemovePlayerFromGameAsync(gameId, playerIdToRemove);
+
+            // 4. Additional business rules
+            await HandlePostRemovalLogicAsync(gameId, playerIdToRemove);
+
+            return RemovePlayerResult.SuccessResult(removedPlayer.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing player");
+            return RemovePlayerResult.Error($"Error: {ex.Message}");
+        }
+    }
+
+    private static ValidationResult ValidatePlayerRemoval(
+        Game game,
+        Guid playerIdToRemove,
+        Guid requestingPlayerId)
+    {
+        // Find requesting player
+        var requester = game.Players.FirstOrDefault(p => p.Id == requestingPlayerId);
+        if (requester == null)
+            return ValidationResult.Invalid("You are not in this game");
+
+        // Check if requester is host
+        var host = game.Players.OrderBy(p => p.JoinedAt).First();
+        if (host.Id != requestingPlayerId)
+            return ValidationResult.Invalid("Only the host can remove players");
+
+        // Find player to remove
+        var playerToRemove = game.Players.FirstOrDefault(p => p.Id == playerIdToRemove);
+        if (playerToRemove == null)
+            return ValidationResult.Invalid("Player not found");
+
+        // Can't remove host
+        if (playerToRemove.Id == host.Id)
+            return ValidationResult.Invalid("Cannot remove the host");
+
+        // Additional business rules
+        if (game.Status == GameStatus.Active && game.Players.Count <= 2)
+            return ValidationResult.Invalid("Cannot remove player during active game with only 2 players");
+
+        return ValidationResult.Valid();
+    }
+
+    private async Task<Player> RemovePlayerFromGameAsync(Guid gameId, Guid playerId)
+    {
+        // This could involve multiple repository calls
+        var player = await _gameRepository.GetPlayerAsync(playerId) ?? throw new InvalidOperationException("Player not found");
+
+        // Remove player's cards from hand
+        var playerHand = await _gameRepository.GetPlayerHandAsync(playerId);
+        foreach (var card in playerHand)
+        {
+            await _gameRepository.DiscardCardAsync(gameId, card.CardId);
+        }
+
+        // Return player's queens to sleeping pool
+        var playerQueens = await _gameRepository.GetPlayerQueensAsync(playerId);
+        foreach (var queen in playerQueens)
+        {
+            await _gameRepository.PutQueenToSleepAsync(queen.Id);
+        }
+
+        // Finally remove player
         await _gameRepository.RemovePlayerAsync(playerId);
 
-        _logger.LogPlayerRemoved( playerId, gameId);
+        return player;
+    }
+
+    private async Task HandlePostRemovalLogicAsync(Guid gameId, Guid removedPlayerId)
+    {
+        var game = await _gameRepository.GetByIdAsync(gameId);
+
+        // If game is active and removed player was current turn, move to next player
+        if (game?.Status == GameStatus.Active)
+        {
+            var removedPlayer = game.Players.FirstOrDefault(p => p.Id == removedPlayerId);
+            if (removedPlayer?.IsCurrentTurn == true)
+            {
+                //await HandleTurnAfterPlayerRemovalAsync(gameId);
+            }
+        }
     }
 
     public async Task UpdatePlayerScoreAsync(Guid playerId, int score)
@@ -152,6 +436,312 @@ public class SleepingQueensGameEngine(
         await _gameRepository.UpdateAsync(player.Game);
 
         _logger.LogPlayerScoreUpdate(playerId, score);
+    }
+
+    public async Task<JoinGameResult> JoinGameAsync(
+    string gameCode,
+    string playerName,
+    string connectionId,
+    Guid? existingPlayerId = null) // For reconnection
+    {
+        try
+        {
+            // 1. Get game data
+            var game = await _gameRepository.GetByCodeAsync(gameCode);
+            if (game == null)
+                return JoinGameResult.Error("Game not found");
+
+            // 2. Business validation
+            var validationResult = ValidateGameJoin(game, playerName);
+            if (!validationResult.IsValid)
+                return JoinGameResult.Error(validationResult.ErrorMessage ?? "");
+
+            // 3. Handle reconnection if existing player
+            Player addedPlayer;
+            if (existingPlayerId.HasValue)
+            {
+                addedPlayer = await HandlePlayerReconnectionAsync(
+                    game.Id, existingPlayerId.Value, connectionId);
+            }
+            else
+            {
+                // 4. Create new player
+                var player = new Player
+                {
+                    Name = playerName,
+                    ConnectionId = connectionId,
+                    GameId = game.Id,
+                    Type = PlayerType.Human
+                };
+
+                addedPlayer = await _gameRepository.AddPlayerAsync(game.Id, player);
+            }
+
+            // 5. Get updated game state
+            var gameStateDto = await GetGameStateDtoAsync(game.Id);
+
+            return JoinGameResult.SuccessResult(
+                game.Id,
+                addedPlayer.Id,
+                addedPlayer.Name,
+                game.Players.Count,
+                gameStateDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error joining game");
+            return JoinGameResult.Error($"Error: {ex.Message}");
+        }
+    }
+
+    private static ValidationResult ValidateGameJoin(Game game, string playerName)
+    {
+        // Name validation
+        if (string.IsNullOrWhiteSpace(playerName))
+            return ValidationResult.Invalid("Player name is required");
+
+        if (playerName.Length > 50)
+            return ValidationResult.Invalid("Player name too long (max 50 characters)");
+
+        // Game state validation
+        if (game.IsFull())
+            return ValidationResult.Invalid("Game is full");
+
+        if (game.Status != GameStatus.Waiting)
+            return ValidationResult.Invalid("Game already started");
+
+        // Check for duplicate names (optional)
+        var existingPlayer = game.Players.FirstOrDefault(p =>
+            p.Name.Equals(playerName, StringComparison.OrdinalIgnoreCase));
+
+        if (existingPlayer != null)
+            return ValidationResult.Invalid($"Name '{playerName}' is already taken");
+
+        return ValidationResult.Valid();
+    }
+
+    private async Task<Player> HandlePlayerReconnectionAsync(
+        Guid gameId,
+        Guid playerId,
+        string newConnectionId)
+    {
+        var player = await _gameRepository.GetPlayerAsync(playerId) ?? throw new InvalidOperationException("Player not found");
+
+        // Update connection ID
+        player.ConnectionId = newConnectionId;
+        await _gameRepository.UpdateAsync(player.Game);
+
+        _logger.LogPlayerReconnected(playerId, gameId);
+
+        return player;
+    }
+
+    public async Task<PlayerDisconnectResult> HandlePlayerDisconnectAsync(Guid playerId)
+    {
+        try
+        {
+            // 1. Get player and game data
+            var player = await _gameRepository.GetPlayerAsync(playerId);
+            if (player == null)
+                return PlayerDisconnectResult.PlayerNotFound();
+
+            var game = await _gameRepository.GetByIdAsync(player.GameId);
+            if (game == null)
+                return PlayerDisconnectResult.GameNotFound();
+
+            // 2. Determine disconnect handling based on game state
+            return game.Status switch
+            {
+                GameStatus.Waiting => await HandleLobbyDisconnectAsync(game, player),
+                GameStatus.Active => await HandleActiveGameDisconnectAsync(game, player),
+                _ => PlayerDisconnectResult.NoActionNeeded(game.Id, player.Name)
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogPlayerDisconnectError(ex, playerId);
+            return PlayerDisconnectResult.Error($"Error handling disconnect: {ex.Message}");
+        }
+    }
+
+    private async Task<PlayerDisconnectResult> HandleLobbyDisconnectAsync(Game game, Player player)
+    {
+        // In lobby: simply remove the player
+        await _gameRepository.RemovePlayerAsync(player.Id);
+
+        // Check if host left - need to assign new host
+        var host = game.Players.OrderBy(p => p.JoinedAt).FirstOrDefault();
+        bool wasHost = host?.Id == player.Id;
+
+        if (wasHost && game.Players.Count > 1)
+        {
+            var newHost = game.Players
+                .Where(p => p.Id != player.Id)
+                .OrderBy(p => p.JoinedAt)
+                .FirstOrDefault();
+
+            if (newHost != null)
+            {
+                // Could mark new host in some way if needed
+                _logger.LogHostChanged(player.Id, newHost.Id, game.Id);
+            }
+        }
+
+        return PlayerDisconnectResult.PlayerRemoved(
+            game.Id,
+            player.Name,
+            wasHost,
+            "Player left the lobby");
+    }
+
+    private async Task<PlayerDisconnectResult> HandleActiveGameDisconnectAsync(Game game, Player player)
+    {
+        // Mark player as disconnected (not removed)
+        player.IsConnected = false;
+        player.LastDisconnectedAt = DateTime.UtcNow;
+        await _gameRepository.UpdateAsync(game);
+
+        // Check if we should end the game
+        var activePlayers = game.Players.Count(p => p.IsConnected);
+        bool shouldEndGame = activePlayers < game.Settings.MinPlayers;
+
+        if (shouldEndGame)
+        {
+            // End the game due to insufficient players
+            await EndGameAsync(game.Id, null); // No winner
+            return PlayerDisconnectResult.GameEnded(
+                game.Id,
+                player.Name,
+                "Game ended due to player disconnect");
+        }
+
+        // Handle turn if disconnected player was current player
+        if (player.IsCurrentTurn)
+        {
+            await HandleTurnAfterDisconnectAsync(game.Id, player.Id);
+        }
+
+        return PlayerDisconnectResult.PlayerDisconnected(
+            game.Id,
+            player.Name,
+            true, // can reconnect
+            "Player disconnected - can reconnect within 2 minutes");
+    }
+
+    private async Task HandleTurnAfterDisconnectAsync(Guid gameId, Guid disconnectedPlayerId)
+    {
+        var game = await _gameRepository.GetByIdAsync(gameId);
+        if (game == null) return;
+
+        var players = game.Players
+            .Where(p => p.IsConnected)
+            .OrderBy(p => p.JoinedAt)
+            .ToList();
+
+        if (players.Count == 0) return;
+
+        // Find next connected player
+        var currentIndex = players.FindIndex(p => p.Id == disconnectedPlayerId);
+        int nextIndex = currentIndex >= 0
+            ? (currentIndex + 1) % players.Count
+            : 0;
+
+        // Update turns
+        await _gameRepository.UpdatePlayerTurnAsync(gameId, disconnectedPlayerId, false);
+        await _gameRepository.UpdatePlayerTurnAsync(gameId, players[nextIndex].Id, true);
+
+        _logger.LogTurnSkippedDueToDisconnect(disconnectedPlayerId, players[nextIndex].Id, gameId);
+    }
+
+    public async Task<ReconnectPlayerResult> ReconnectPlayerAsync(Guid gameId, Guid playerId, string connectionId)
+    {
+        try
+        {
+            // 1. Get player and game data
+            var player = await _gameRepository.GetPlayerAsync(playerId);
+            if (player == null)
+                return ReconnectPlayerResult.Error("Player not found");
+
+            if (player.GameId != gameId)
+                return ReconnectPlayerResult.Error("Player is not in this game");
+
+            var game = await _gameRepository.GetByIdAsync(gameId);
+            if (game == null)
+                return ReconnectPlayerResult.Error("Game not found");
+
+            // 2. Validate reconnection is allowed
+            var validationResult = ValidateReconnection(game, player);
+            if (!validationResult.IsValid)
+                return ReconnectPlayerResult.Error(validationResult.ErrorMessage!);
+
+            // 3. Update player connection
+            player.ConnectionId = connectionId;
+            player.IsConnected = true;
+            player.LastReconnectedAt = DateTime.UtcNow;
+
+            // 4. Handle special cases
+            await HandleReconnectionSpecialCasesAsync(game, player);
+
+            // 5. Save changes
+            await _gameRepository.UpdateAsync(game);
+
+            _logger.LogPlayerReconnected(playerId, gameId);
+
+            return ReconnectPlayerResult.SuccessResult(player.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogPlayerReconnectError(ex, playerId, gameId);
+            return ReconnectPlayerResult.Error($"Reconnection failed: {ex.Message}");
+        }
+    }
+
+    private static ValidationResult ValidateReconnection(Game game, Player player)
+    {
+        // Game must be active
+        if (game.Status != GameStatus.Active)
+            return ValidationResult.Invalid("Cannot reconnect to a game that is not active");
+
+        // Player must be part of the game
+        if (!game.Players.Any(p => p.Id == player.Id))
+            return ValidationResult.Invalid("Player is not part of this game");
+
+        // Check if player was marked as disconnected
+        if (player.IsConnected)
+            return ValidationResult.Invalid("Player is already connected");
+
+        // Check reconnection window (optional - you could remove this if GameHub handles it)
+        if (player.LastDisconnectedAt.HasValue)
+        {
+            var timeSinceDisconnect = DateTime.UtcNow - player.LastDisconnectedAt.Value;
+            if (timeSinceDisconnect.TotalMinutes > 5) // 5-minute reconnection window
+                return ValidationResult.Invalid("Reconnection window has expired");
+        }
+
+        return ValidationResult.Valid();
+    }
+
+    private async Task HandleReconnectionSpecialCasesAsync(Game game, Player player)
+    {
+        // If this is the only reconnected player and game was paused, resume game
+        var disconnectedPlayers = game.Players.Count(p => !p.IsConnected);
+        var totalPlayers = game.Players.Count;
+
+        if (disconnectedPlayers == 0)
+        {
+            // All players are now connected
+            _logger.LogAllPlayersReconnected(game.Id);
+
+            // You could send a notification that game is fully reconnected
+            // await _notificationService.NotifyGameResumedAsync(game.Id);
+        }
+
+        // If player was AI-controlled while disconnected, remove AI control
+        if (player.IsAIControlled)
+        {
+            player.IsAIControlled = false;
+            _logger.LogPlayerRegainedControl(player.Id, game.Id);
+        }
     }
 
     // ========== GAME ACTIONS ==========
@@ -856,12 +1446,6 @@ public class SleepingQueensGameEngine(
         }
 
         return true;
-    }
-
-    // Helper method for GameRepository
-    private async Task<IEnumerable<Queen>> GetQueensForGameAsync(Guid gameId)
-    {
-        return await _gameRepository.GetQueensForGameAsync(gameId);
     }
 }
 

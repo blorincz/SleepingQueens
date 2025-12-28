@@ -134,3 +134,63 @@ SleepingQueens.Tests/
 │   ├── TestExtensions.cs
 │   └── TestConstants.cs
 └── SleepingQueens.Tests.csproj
+
+1. GameHub - SignalR Hub Layer
+Purpose: Handle real-time WebSocket communication
+Responsibilities:
+
+Client connection management
+
+Message routing to/from clients
+
+Authentication/authorization
+
+SignalR group management
+
+Broadcasting updates
+
+2. GameEngine - Business Logic Layer
+Purpose: Implement game rules and logic
+Responsibilities:
+
+Game state validation
+
+Move/action validation
+
+Game rule enforcement
+
+Turn management
+
+Win condition checking
+
+AI decision making
+
+3. GameRepository - Data Access Layer
+Purpose: Handle data persistence
+Responsibilities:
+
+CRUD operations for Game/Player entities
+
+Database queries
+
+Transaction management
+
+Data consistency
+
+Client → GameHub → GameEngine → GameRepository → Database
+
+No Cross-Layer Calls:
+
+GameHub should NEVER call GameRepository directly
+
+GameEngine should ONLY call GameRepository for data access
+
+GameRepository should ONLY talk to the database
+
+Clear Boundaries:
+
+GameHub: SignalR concerns only
+
+GameEngine: Game logic only
+
+GameRepository: Data persistence only

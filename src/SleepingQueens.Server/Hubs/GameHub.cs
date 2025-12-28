@@ -1,23 +1,22 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using SleepingQueens.Data.Repositories;
-using SleepingQueens.Server.GameEngine;        // IGameEngine from Shared
+using SleepingQueens.Client.Pages;
+using SleepingQueens.Server.GameEngine;
 using SleepingQueens.Server.Logging;
-using SleepingQueens.Shared.Models.DTOs;       // DTOs from Shared
+using SleepingQueens.Shared.Models.DTOs;
 using SleepingQueens.Shared.Models.Game;
-using SleepingQueens.Shared.Models.Game.Enums;       // Domain models from Shared
+using SleepingQueens.Shared.Models.Game.Enums;
 
 namespace SleepingQueens.Server.Hubs;
 
 public class GameHub(
     IGameEngine gameEngine,
-    IGameRepository gameRepository,
     ILogger<GameHub> logger) : Hub
 {
     private readonly IGameEngine _gameEngine = gameEngine;
-    private readonly IGameRepository _gameRepository = gameRepository;
     private readonly ILogger<GameHub> _logger = logger;
     private static readonly Dictionary<string, Guid> _connectionPlayerMap = [];
     private static readonly Dictionary<Guid, string> _playerConnectionMap = [];
+    private static readonly Dictionary<Guid, DateTime> _disconnectionTimes = [];
 
     // ========== CONNECTION MANAGEMENT ==========
 
@@ -53,14 +52,10 @@ public class GameHub(
                 ConnectionId = Context.ConnectionId
             };
 
-            var game = _gameEngine.CreateGame(request.Settings, creator);
-
-            // Initialize the game in repository
-            await _gameRepository.InitializeNewGameAsync(game, creator);
+            var game = await _gameEngine.CreateGame(request.Settings, creator);
 
             // Map connection to player
-            _connectionPlayerMap[Context.ConnectionId] = creator.Id;
-            _playerConnectionMap[creator.Id] = Context.ConnectionId;
+            await MapPlayerConnectionAsync(creator.Id, Context.ConnectionId);
 
             // Add to game group
             await Groups.AddToGroupAsync(Context.ConnectionId, game.Id.ToString());
@@ -81,64 +76,37 @@ public class GameHub(
         }
     }
 
-    public async Task<ApiResponse<JoinGameResult>> JoinGame(JoinGameRequest request)
+    public async Task<ApiResponse<JoinGameResultDto>> JoinGame(JoinGameRequest request)
     {
-        var playerName = request.PlayerName;
-        var gameCode = request.GameCode;
-
         try
         {
-            _logger.LogPlayerJoinedGame(playerName, gameCode);
+            var playerId = GetPlayerId();
+            var result = await _gameEngine.JoinGameAsync(request.GameCode, request.PlayerName, Context.ConnectionId, playerId);
 
-            var game = await _gameRepository.GetByCodeAsync(gameCode);
-            if (game == null)
-                return new ApiResponse<JoinGameResult>() { Success = false, ErrorMessage = "Game not found" };
-
-            if (game.IsFull())
-                return new ApiResponse<JoinGameResult>() { Success = false, ErrorMessage = "Game is full" };
-
-            if (game.Status != GameStatus.Waiting)
-                return new ApiResponse<JoinGameResult>() { Success = false, ErrorMessage = "Game already started" };
-
-            var player = new Player
+            if (result.Success)
             {
-                Name = playerName,
-                ConnectionId = Context.ConnectionId,
-                GameId = game.Id
-            };
+                // Hub responsibilities only
+                await MapPlayerConnectionAsync(result.JoinedPlayerId, Context.ConnectionId);
+                await Groups.AddToGroupAsync(Context.ConnectionId, result.GameId.ToString());
 
-            var addedPlayer = await _gameRepository.AddPlayerAsync(game.Id, player);
+                // Notify all players using reusable method
+                await NotifyAllPlayersAsync(
+                    result.GameId,
+                    "PlayerJoined",
+                    new PlayerJoinedEvent
+                    {
+                        PlayerId = result.JoinedPlayerId,
+                        PlayerName = result.JoinedPlayerName,
+                        TotalPlayers = result.TotalPlayers
+                    });
+            }
 
-            // Map connection to player
-            _connectionPlayerMap[Context.ConnectionId] = addedPlayer.Id;
-            _playerConnectionMap[addedPlayer.Id] = Context.ConnectionId;
-
-            // Add to game group
-            await Groups.AddToGroupAsync(Context.ConnectionId, game.Id.ToString());
-
-            // Notify other players
-            await Clients.Group(game.Id.ToString())
-                .SendAsync("PlayerJoined", new PlayerJoinedEvent
-                {
-                    PlayerId = addedPlayer.Id,
-                    PlayerName = playerName,
-                    TotalPlayers = game.Players.Count
-                });
-
-            // Send initial game state to joining player
-            var gameStateDto = await _gameEngine.GetGameStateDtoAsync(game.Id);
-
-            return ApiResponse<JoinGameResult>.SuccessResponse(new JoinGameResult
-            {
-                GameId = game.Id,
-                PlayerId = addedPlayer.Id,
-                GameState = gameStateDto
-            });
+            return result.ToApiResponse();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error joining game");
-            return ApiResponse<JoinGameResult>.ErrorResponse(ex.Message);
+            return ApiResponse<JoinGameResultDto>.ErrorResponse(ex.Message);
         }
     }
 
@@ -147,32 +115,14 @@ public class GameHub(
         try
         {
             var playerId = GetPlayerId();
-            var game = await _gameRepository.GetByIdAsync(gameId);
+            var result = await _gameEngine.AddAIPlayerAsync(gameId, level, playerId);
 
-            if (game == null)
-                return ApiResponse.ErrorResponse("Game not found");
+            if (result.IsSuccess)
+            {
+                await NotifyPlayerJoinedAsync(gameId, result.PlayerId, result.PlayerName, result.TotalPlayers);
+            }
 
-            // Check if player is host (first player)
-            var host = game.Players.OrderBy(p => p.JoinedAt).FirstOrDefault();
-            if (host?.Id != playerId)
-                return ApiResponse.ErrorResponse("Only the host can add AI players");
-
-            if (game.IsFull())
-                return ApiResponse.ErrorResponse("Game is full");
-
-            // Add AI player
-            var aiPlayer = await _gameEngine.AddAIPlayerAsync(gameId, level);
-
-            // Notify all players
-            await Clients.Group(gameId.ToString())
-                .SendAsync("PlayerJoined", new PlayerJoinedEvent
-                {
-                    PlayerId = aiPlayer.Id,
-                    PlayerName = aiPlayer.Name,
-                    TotalPlayers = game.Players.Count
-                });
-
-            return ApiResponse.SuccessResponse();
+            return result.ToApiResponse();
         }
         catch (Exception ex)
         {
@@ -186,36 +136,14 @@ public class GameHub(
         try
         {
             var currentPlayerId = GetPlayerId();
-            var game = await _gameRepository.GetByIdAsync(gameId);
+            var result = await _gameEngine.RemovePlayerAsync(gameId, playerId, currentPlayerId);
 
-            if (game == null)
-                return ApiResponse.ErrorResponse("Game not found");
+            if (result.Success)
+            {
+                await NotifyPlayerLeftAsync(gameId, playerId,result.RemovedPlayerName ?? "");
+            }
 
-            // Check if current player is host
-            var host = game.Players.OrderBy(p => p.JoinedAt).FirstOrDefault();
-            if (host?.Id != currentPlayerId)
-                return ApiResponse.ErrorResponse("Only the host can remove players");
-
-            var playerToRemove = game.Players.FirstOrDefault(p => p.Id == playerId);
-            if (playerToRemove == null)
-                return ApiResponse.ErrorResponse("Player not found");
-
-            // Can't remove host
-            if (playerToRemove.Id == host.Id)
-                return ApiResponse.ErrorResponse("Cannot remove the host");
-
-            // Remove the player
-            await _gameEngine.RemovePlayerAsync(gameId, playerId);
-
-            // Notify all players
-            await Clients.Group(gameId.ToString())
-                .SendAsync("PlayerLeft", new PlayerLeftEvent
-                {
-                    PlayerId = playerId,
-                    PlayerName = playerToRemove.Name
-                });
-
-            return ApiResponse.SuccessResponse();
+            return result.ToApiResponse();
         }
         catch (Exception ex)
         {
@@ -224,53 +152,28 @@ public class GameHub(
         }
     }
 
-    public async Task<StartGameResponse> StartGame(Guid gameId)
+    public async Task<ApiResponse> StartGameAsync(Guid gameId)
     {
         try
         {
             var playerId = GetPlayerId();
-            var game = await _gameRepository.GetByIdAsync(gameId);
+            var game = await _gameEngine.StartGameAsync(gameId, playerId);
 
-            if (game == null)
-                return new StartGameResponse { Success = false, ErrorMessage = "Game not found" };
+            if (game != null)
+            {
+                await NotifyGameStartedAsync(game.Id);
 
-            // Check if player is in this game
-            if (!game.Players.Any(p => p.Id == playerId))
-                return new StartGameResponse { Success = false, ErrorMessage = "Not in game" };
+                // Send updated game state
+                var gameStateDto = await _gameEngine.GetGameStateDtoAsync(game.Id);
+                await NotifyGameStateUpdatedAsync(game.Id, gameStateDto);
+            }
 
-            // Check if player is host (first player)
-            var host = game.Players.OrderBy(p => p.JoinedAt).FirstOrDefault();
-            if (host?.Id != playerId)
-                return new StartGameResponse { Success = false, ErrorMessage = "Only the host can start the game" };
-
-            // Start the game
-            var startedGame = await _gameEngine.StartGameAsync(gameId);
-
-            // Notify all players
-            await Clients.Group(gameId.ToString())
-                .SendAsync("GameStarted", new GameStartedEvent
-                {
-                    GameId = gameId,
-                    StartedAt = startedGame.StartedAt!.Value,
-                    Players = [.. startedGame.Players.Select(p => new PlayerInfo
-                    {
-                        Id = p.Id,
-                        Name = p.Name,
-                        IsCurrentTurn = p.IsCurrentTurn
-                    })]
-                });
-
-            // Send initial game state to all players
-            var gameState = await _gameEngine.GetGameStateDtoAsync(gameId);
-            await Clients.Group(gameId.ToString())
-                .SendAsync("GameStateUpdated", gameState);
-
-            return new StartGameResponse { Success = true };
+            return ApiResponse.SuccessResponse();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error starting game");
-            return new StartGameResponse { Success = false, ErrorMessage = ex.Message };
+            return ApiResponse.ErrorResponse(ex.Message);
         }
     }
 
@@ -291,11 +194,7 @@ public class GameHub(
             if (result.Success)
             {
                 var gameStateDto = await _gameEngine.GetGameStateDtoAsync(request.GameId);
-
-                // Notify all players
-                await Clients.Group(request.GameId.ToString())
-                    .SendAsync("GameStateUpdated", gameStateDto);
-
+                await NotifyGameStateUpdatedAsync(request.GameId, gameStateDto);
                 return ApiResponse<GameStateDto>.SuccessResponse(gameStateDto);
             }
 
@@ -308,66 +207,54 @@ public class GameHub(
         }
     }
 
-    public async Task<DrawCardResponse> DrawCard(Guid gameId)
+    public async Task<ApiResponse<GameStateDto>> DrawCard(Guid gameId)
     {
         try
         {
             var playerId = GetPlayerId();
-
             var result = await _gameEngine.DrawCardAsync(gameId, playerId);
 
             if (result.Success && result.UpdatedState != null)
             {
-                await Clients.Group(gameId.ToString())
-                    .SendAsync("GameStateUpdated", result.UpdatedState);
+                await NotifyGameStateUpdatedAsync(gameId, result.UpdatedState);
+                return ApiResponse<GameStateDto>.SuccessResponse(result.UpdatedState);
             }
 
-            return new DrawCardResponse
-            {
-                Success = result.Success,
-                Message = result.Message,
-                GameState = result.UpdatedState
-            };
+            return ApiResponse<GameStateDto>.ErrorResponse(result.Message);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error drawing card");
-            return new DrawCardResponse
+            return new ApiResponse<GameStateDto>
             {
                 Success = false,
-                Message = $"Error: {ex.Message}"
+                ErrorMessage = $"Error: {ex.Message}"
             };
         }
     }
 
-    public async Task<EndTurnResponse> EndTurn(Guid gameId)
+    public async Task<ApiResponse<GameStateDto>> EndTurn(Guid gameId)
     {
         try
         {
             var playerId = GetPlayerId();
-
             var result = await _gameEngine.EndTurnAsync(gameId, playerId);
 
             if (result.Success && result.UpdatedState != null)
             {
-                await Clients.Group(gameId.ToString())
-                    .SendAsync("GameStateUpdated", result.UpdatedState);
+                await NotifyGameStateUpdatedAsync(gameId, result.UpdatedState);
+                return ApiResponse<GameStateDto>.SuccessResponse(result.UpdatedState);
             }
 
-            return new EndTurnResponse
-            {
-                Success = result.Success,
-                Message = result.Message,
-                GameState = result.UpdatedState
-            };
+            return ApiResponse<GameStateDto>.ErrorResponse(result.Message);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error ending turn");
-            return new EndTurnResponse
+            return new ApiResponse<GameStateDto>
             {
                 Success = false,
-                Message = $"Error: {ex.Message}"
+                ErrorMessage = $"Error: {ex.Message}"
             };
         }
     }
@@ -388,39 +275,36 @@ public class GameHub(
         }
     }
 
-    public async Task<IEnumerable<ActiveGameInfo>> GetActiveGames()
+    public async Task<ActiveGamesResult> GetActiveGames()
     {
-        var games = await _gameRepository.GetActiveGamesAsync();
-        return games.Select(g => new ActiveGameInfo
+        try
         {
-            GameId = g.Id,
-            GameCode = g.Code,
-            PlayerCount = g.Players.Count,
-            MaxPlayers = g.MaxPlayers,
-            Status = g.Status,
-            CreatedAt = g.CreatedAt
-        });
+            return await _gameEngine.GetActiveGamesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting active games");
+            return ActiveGamesResult.Error("Internal server error");
+        }
     }
 
     // ========== CHAT ==========
 
     public async Task SendMessage(Guid gameId, string message)
     {
-        var playerId = GetPlayerId();
-        var player = await _gameRepository.GetPlayerAsync(playerId);
+        var player = await _gameEngine.GetCurrentPlayerAsync(gameId);
 
         if (player != null)
         {
             var chatMessage = new ChatMessage
             {
-                PlayerId = playerId,
+                PlayerId = player.Id,
                 PlayerName = player.Name,
                 Message = message,
                 Timestamp = DateTime.UtcNow
             };
 
-            await Clients.Group(gameId.ToString())
-                .SendAsync("ChatMessageReceived", chatMessage);
+            await NotifyAllPlayersAsync(gameId, "ChatMessageReceived", chatMessage);
         }
     }
 
@@ -436,33 +320,181 @@ public class GameHub(
 
     private async Task HandlePlayerDisconnect(Guid playerId)
     {
-        _connectionPlayerMap.Remove(Context.ConnectionId);
-        _playerConnectionMap.Remove(playerId);
+        try
+        {
+            // 1. Unmap connection (Hub responsibility)
+            await UnmapPlayerConnectionAsync(playerId);
 
-        var player = await _gameRepository.GetPlayerAsync(playerId);
-        if (player == null) return;
+            // 2. Let GameEngine handle the business logic
+            var result = await _gameEngine.HandlePlayerDisconnectAsync(playerId);
 
-        var gameId = player.GameId;
-
-        // Notify other players
-        await Clients.Group(gameId.ToString())
-            .SendAsync("PlayerLeft", new PlayerLeftEvent
+            // 3. Notify other players if needed
+            if (result.ShouldNotifyPlayers && result.PlayerName != null)
             {
-                PlayerId = playerId,
-                PlayerName = player.Name
-            });
+                await NotifyAllPlayersAsync(
+                    result.GameId,
+                    "PlayerLeft",
+                    new PlayerLeftEvent
+                    {
+                        PlayerId = playerId,
+                        PlayerName = result.PlayerName,
+                        CanReconnect = result.CanReconnect,
+                        Message = result.NotificationMessage
+                    });
+            }
 
-        // If game hasn't started yet, remove the player
-        var game = await _gameRepository.GetByIdAsync(gameId);
-        if (game?.Status == GameStatus.Waiting)
-        {
-            await _gameRepository.RemovePlayerAsync(playerId);
+            // 4. Log the disconnect
+            if (result.IsGameActive)
+            {
+                _logger.LogPlayerDisconnectedWarning(playerId, result.CanReconnect);
+            }
+            else
+            {
+                _logger.LogPlayerDisconnectedWarning(playerId);
+            }
         }
-        // If game is active, mark player as disconnected
-        else if (game?.Status == GameStatus.Active)
+        catch (Exception ex)
         {
-            // Could implement reconnection logic here
-            _logger.LogPlayerDisconnectedWarning(playerId);
+            _logger.LogPlayerDisconnectError(ex, playerId);
+        }
+    }
+
+    public async Task<ApiResponse> ReconnectPlayer(Guid gameId, Guid playerId)
+    {
+        try
+        {
+            var connectionId = Context.ConnectionId;
+
+            // Check if within reconnection window (e.g., 2 minutes)
+            if (_disconnectionTimes.TryGetValue(playerId, out var disconnectTime))
+            {
+                var timeSinceDisconnect = DateTime.UtcNow - disconnectTime;
+                if (timeSinceDisconnect.TotalMinutes > 2)
+                {
+                    return ApiResponse.ErrorResponse("Reconnection window expired");
+                }
+
+                // Remove from disconnection tracking
+                _disconnectionTimes.Remove(playerId);
+            }
+
+            var result = await _gameEngine.ReconnectPlayerAsync(gameId, playerId, connectionId);
+
+            if (result.Success)
+            {
+                // Update connection mapping
+                await MapPlayerConnectionAsync(playerId, connectionId);
+
+                // Add to group
+                await Groups.AddToGroupAsync(connectionId, gameId.ToString());
+
+                // Notify players
+                await NotifyAllPlayersAsync(gameId, "PlayerReconnected", new PlayerReconnectedEvent
+                {
+                    PlayerId = playerId,
+                    PlayerName = result.PlayerName!
+                });
+
+                // Send current game state to reconnecting player
+                var gameState = await _gameEngine.GetGameStateDtoAsync(gameId);
+                await Clients.Client(connectionId).SendAsync("GameStateUpdated", gameState);
+            }
+
+            return result.ToApiResponse();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogPlayerReconnectError(ex, playerId, gameId);
+            return ApiResponse.ErrorResponse($"Reconnection failed: {ex.Message}");
+        }
+    }
+
+    private async Task NotifyAllPlayersAsync<TEvent>(Guid gameId, string eventName, TEvent eventData)
+    {
+        try
+        {
+            await Clients.Group(gameId.ToString()).SendAsync(eventName, eventData);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogFailedToNotifyPlayersWarning(ex, eventName, gameId);
+        }
+    }
+
+    private async Task NotifySpecificPlayerAsync<TEvent>(Guid playerId, string eventName, TEvent eventData)
+    {
+        try
+        {
+            if (_playerConnectionMap.TryGetValue(playerId, out var connectionId))
+            {
+                await Clients.Client(connectionId).SendAsync(eventName, eventData);
+            }
+            else
+            {
+                _logger.LogCannotNotifyPlayerWarning(playerId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogFailedToNotifyPlayerWarning(ex, playerId, eventName);
+        }
+    }
+
+    // Convenience methods for common events
+    private async Task NotifyPlayerJoinedAsync(Guid gameId, Guid playerId, string playerName, int totalPlayers)
+    {
+        await NotifyAllPlayersAsync(gameId, "PlayerJoined", new PlayerJoinedEvent
+        {
+            PlayerId = playerId,
+            PlayerName = playerName,
+            TotalPlayers = totalPlayers
+        });
+    }
+
+    private async Task NotifyPlayerLeftAsync(Guid gameId, Guid playerId, string playerName)
+    {
+        await NotifyAllPlayersAsync(gameId, "PlayerLeft", new PlayerLeftEvent
+        {
+            PlayerId = playerId,
+            PlayerName = playerName
+        });
+    }
+
+    private async Task NotifyGameStateUpdatedAsync(Guid gameId, GameStateDto gameState)
+    {
+        await NotifyAllPlayersAsync(gameId, "GameStateUpdated", gameState);
+    }
+
+    private async Task NotifyGameStartedAsync(Guid gameId)
+    {
+        await NotifyAllPlayersAsync(gameId, "GameStarted", new GameStartedEvent
+        {
+            GameId = gameId,
+            StartedAt = DateTime.UtcNow
+        });
+    }
+
+    private static async Task MapPlayerConnectionAsync(Guid playerId, string connectionId)
+    {
+        // Remove old mapping if reconnecting
+        if (_playerConnectionMap.TryGetValue(playerId, out var oldConnectionId))
+        {
+            _connectionPlayerMap.Remove(oldConnectionId);
+        }
+
+        _connectionPlayerMap[connectionId] = playerId;
+        _playerConnectionMap[playerId] = connectionId;
+    }
+
+    private static async Task UnmapPlayerConnectionAsync(Guid playerId)
+    {
+        if (_playerConnectionMap.TryGetValue(playerId, out var connectionId))
+        {
+            _connectionPlayerMap.Remove(connectionId);
+            _playerConnectionMap.Remove(playerId);
+
+            // Also track disconnection time for reconnection window
+            _disconnectionTimes[playerId] = DateTime.UtcNow;
         }
     }
 }

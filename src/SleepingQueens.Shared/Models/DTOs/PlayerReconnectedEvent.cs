@@ -1,9 +1,8 @@
 ﻿namespace SleepingQueens.Shared.Models.DTOs;
 
-public class PlayerLeftEvent
+public class PlayerReconnectedEvent
 {
     public Guid PlayerId { get; set; }
     public string PlayerName { get; set; } = string.Empty;
-    public bool CanReconnect { get; set; }
-    public string? Message { get; set; }
+    public DateTime ReconnectedAt { get; set; } = DateTime.UtcNow;
 }
