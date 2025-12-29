@@ -398,7 +398,7 @@ public class SleepingQueensGameEngine(
         var playerHand = await _gameRepository.GetPlayerHandAsync(playerId);
         foreach (var card in playerHand)
         {
-            await _gameRepository.DiscardCardAsync(gameId, card.CardId);
+            await _gameRepository.DiscardCardAsync(gameId, card.Id);
         }
 
         // Return player's queens to sleeping pool
@@ -438,11 +438,7 @@ public class SleepingQueensGameEngine(
         _logger.LogPlayerScoreUpdate(playerId, score);
     }
 
-    public async Task<JoinGameResult> JoinGameAsync(
-    string gameCode,
-    string playerName,
-    string connectionId,
-    Guid? existingPlayerId = null) // For reconnection
+    public async Task<JoinGameResult> JoinGameAsync(string gameCode, string playerName, string connectionId, Guid? existingPlayerId = null)
     {
         try
         {
@@ -460,8 +456,7 @@ public class SleepingQueensGameEngine(
             Player addedPlayer;
             if (existingPlayerId.HasValue)
             {
-                addedPlayer = await HandlePlayerReconnectionAsync(
-                    game.Id, existingPlayerId.Value, connectionId);
+                addedPlayer = await HandlePlayerReconnectionAsync(game.Id, existingPlayerId.Value, connectionId);
             }
             else
             {
@@ -520,10 +515,7 @@ public class SleepingQueensGameEngine(
         return ValidationResult.Valid();
     }
 
-    private async Task<Player> HandlePlayerReconnectionAsync(
-        Guid gameId,
-        Guid playerId,
-        string newConnectionId)
+    private async Task<Player> HandlePlayerReconnectionAsync(Guid gameId, Guid playerId, string newConnectionId)
     {
         var player = await _gameRepository.GetPlayerAsync(playerId) ?? throw new InvalidOperationException("Player not found");
 
@@ -1446,26 +1438,5 @@ public class SleepingQueensGameEngine(
         }
 
         return true;
-    }
-}
-
-// Extension method for GameRepository (add this to GameRepository.cs)
-public static class GameRepositoryExtensions
-{
-    public static async Task<List<Queen>> GetQueensForGameAsync(this IGameRepository repository, Guid gameId)
-    {
-        // This method should be implemented in GameRepository
-        // For now, combine sleeping and player queens
-        var sleepingQueens = await repository.GetSleepingQueensAsync(gameId);
-        var allQueens = new List<Queen>(sleepingQueens);
-
-        var players = await repository.GetPlayersInGameAsync(gameId);
-        foreach (var player in players)
-        {
-            var playerQueens = await repository.GetPlayerQueensAsync(player.Id);
-            allQueens.AddRange(playerQueens);
-        }
-
-        return allQueens;
     }
 }

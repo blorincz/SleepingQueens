@@ -184,15 +184,6 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
             .ToListAsync();
     }
 
-    public async Task<IEnumerable<Card>> GetPlayerHandAsync(Guid playerId)
-    {
-        return await _context.PlayerCards
-            .Where(pc => pc.PlayerId == playerId)
-            .OrderBy(pc => pc.HandPosition)
-            .Select(pc => pc.Card)
-            .ToListAsync();
-    }
-
     public async Task AddCardToPlayerHandAsync(Guid playerId, Guid cardId)
     {
         var nextPosition = await _context.PlayerCards
@@ -286,7 +277,7 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
         await _context.SaveChangesAsync();
     }
 
-    public async Task<IEnumerable<GameCard>> GetDeckCardsAsync(Guid gameId)
+    public async Task<List<GameCard>> GetDeckCardsAsync(Guid gameId)
     {
         return await _context.GameCards
             .Include(gc => gc.Card)
@@ -295,7 +286,7 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
             .ToListAsync();
     }
 
-    public async Task<IEnumerable<GameCard>> GetDiscardPileAsync(Guid gameId)
+    public async Task<List<GameCard>> GetDiscardPileAsync(Guid gameId)
     {
         return await _context.GameCards
             .Include(gc => gc.Card)
@@ -534,24 +525,22 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
         await _context.SaveChangesAsync();
     }
 
-    Task<List<GameCard>> IGameRepository.GetPlayerHandAsync(Guid playerId)
+    public async Task<List<Card>> GetPlayerHandAsync(Guid playerId)
     {
-        throw new NotImplementedException();
+        return await _context.PlayerCards
+            .Where(pc => pc.PlayerId == playerId)
+            .OrderBy(pc => pc.HandPosition)
+            .Select(pc => pc.Card)
+            .ToListAsync();
     }
 
-    Task<List<GameCard>> IGameRepository.GetDiscardPileAsync(Guid gameId)
+    public async Task<List<Card>> GetByTypeAsync(CardType type)
     {
-        throw new NotImplementedException();
-    }
-
-    Task<List<GameCard>> IGameRepository.GetDeckCardsAsync(Guid gameId)
-    {
-        throw new NotImplementedException();
-    }
-
-    Task<IEnumerable<Card>> IGameRepository.GetByTypeAsync(CardType type)
-    {
-        throw new NotImplementedException();
+        return await _context.Cards
+            .Where(c => c.Type == type)
+            .OrderBy(c => c.Value)
+            .ThenBy(c => c.Name)
+            .ToListAsync();
     }
 
     public async Task PlaceSleepingQueensAsync(Guid gameId, GameSettings settings)
@@ -593,5 +582,24 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
             _context.Queens.Add(queen);
             await _context.SaveChangesAsync();
         }
+    }
+}
+public static class GameRepositoryExtensions
+{
+    public static async Task<List<Queen>> GetQueensForGameAsync(this IGameRepository repository, Guid gameId)
+    {
+        // This method should be implemented in GameRepository
+        // For now, combine sleeping and player queens
+        var sleepingQueens = await repository.GetSleepingQueensAsync(gameId);
+        var allQueens = new List<Queen>(sleepingQueens);
+
+        var players = await repository.GetPlayersInGameAsync(gameId);
+        foreach (var player in players)
+        {
+            var playerQueens = await repository.GetPlayerQueensAsync(player.Id);
+            allQueens.AddRange(playerQueens);
+        }
+
+        return allQueens;
     }
 }

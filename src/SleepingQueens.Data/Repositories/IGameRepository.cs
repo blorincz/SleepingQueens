@@ -29,11 +29,11 @@ public interface IGameRepository
     Task<GameCard?> DrawCardFromDeckAsync(Guid gameId);
     Task AddCardToPlayerHandAsync(Guid playerId, Guid cardId);
     Task RemoveCardFromPlayerHandAsync(Guid playerId, Guid cardId);
-    Task<List<GameCard>> GetPlayerHandAsync(Guid playerId);
+    Task<List<Card>> GetPlayerHandAsync(Guid playerId);
     Task DiscardCardAsync(Guid gameId, Guid cardId);
     Task<List<GameCard>> GetDiscardPileAsync(Guid gameId);
     Task<List<GameCard>> GetDeckCardsAsync(Guid gameId);
-    Task<IEnumerable<Card>> GetByTypeAsync(CardType type);
+    Task<List<Card>> GetByTypeAsync(CardType type);
     Task<IEnumerable<Card>> GetNumberCardsAsync();
     Task<IEnumerable<Card>> GetSpecialCardsAsync();
     Task<Card?> GetCardByValueAsync(CardType type, int value);

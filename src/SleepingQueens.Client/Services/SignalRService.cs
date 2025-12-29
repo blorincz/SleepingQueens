@@ -34,7 +34,7 @@ public interface ISignalRService : IAsyncDisposable
 
     // Game Actions
     Task<ApiResponse<GameStateDto>> PlayCardAsync(PlayCardRequest request);
-    Task<ApiResponse<DrawCardResult>> DrawCardAsync(Guid gameId);
+    Task<ApiResponse<GameStateDto>> DrawCardAsync(Guid gameId);
     Task<ApiResponse<GameStateDto>> EndTurnAsync(Guid gameId);
     Task<ApiResponse<GameStateDto>> DiscardCardsAsync(Guid gameId, IEnumerable<Guid> cardIds);
 
@@ -254,7 +254,7 @@ public class SignalRService(
 
     public async Task<ApiResponse> StartGameAsync(Guid gameId)
     {
-        return await ExecuteHubMethodAsync<ApiResponse>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
@@ -262,16 +262,11 @@ public class SignalRService(
             _logger.LogGameStarted(gameId);
 
             // Map from StartGameResponse to ApiResponse
-            var response = await _hubConnection.InvokeAsync<StartGameResponse>("StartGame", gameId);
-            var apiResponse = new ApiResponse
-            {
-                Success = response.Success,
-                ErrorMessage = response.ErrorMessage
-            };
+            var response = await _hubConnection.InvokeAsync<ApiResponse>("StartGameAsync", gameId);
 
-            await NotifyGameActionResponse(apiResponse);
-            return apiResponse;
-        }, "StartGame");
+            await NotifyGameActionResponse(response);
+            return response;
+        }, "StartGameAsync");
     }
 
     #endregion
@@ -293,56 +288,35 @@ public class SignalRService(
         }, "PlayCard");
     }
 
-    public async Task<ApiResponse<DrawCardResult>> DrawCardAsync(Guid gameId)
+    public async Task<ApiResponse<GameStateDto>> DrawCardAsync(Guid gameId)
     {
-        return await ExecuteHubMethodAsync<ApiResponse<DrawCardResult>>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
             _logger.LogDrawCard(gameId);
 
-            // Map from DrawCardResponse to ApiResponse<DrawCardResult>
-            var response = await _hubConnection.InvokeAsync<DrawCardResponse>("DrawCard", gameId);
+            var response = await _hubConnection.InvokeAsync<ApiResponse<GameStateDto>>("DrawCard", gameId);
 
-            var apiResponse = new ApiResponse<DrawCardResult>
-            {
-                Success = response.Success,
-                ErrorMessage = response.Message,
-                Data = response.Success ? new DrawCardResult
-                {
-                    CardId = response.CardId ?? Guid.Empty,
-                    CardName = response.CardName ?? "Unknown Card",
-                    GameState = response.GameState
-                } : null
-            };
-
-            await NotifyGameActionResponse(apiResponse);
-            return apiResponse;
+            await NotifyGameActionResponse(response);
+            return response;
         }, "DrawCard");
     }
 
     public async Task<ApiResponse<GameStateDto>> EndTurnAsync(Guid gameId)
     {
-        return await ExecuteHubMethodAsync<ApiResponse<GameStateDto>>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
             _logger.LogEndingTurn(gameId);
 
-            // Map from EndTurnResponse to ApiResponse<GameStateDto>
-            var response = await _hubConnection.InvokeAsync<EndTurnResponse>("EndTurn", gameId);
+            var response = await _hubConnection.InvokeAsync<ApiResponse<GameStateDto>>("EndTurn", gameId);
 
-            var apiResponse = new ApiResponse<GameStateDto>
-            {
-                Success = response.Success,
-                ErrorMessage = response.Message,
-                Data = response.GameState
-            };
-
-            await NotifyGameActionResponse(apiResponse);
-            return apiResponse;
+            await NotifyGameActionResponse(response);
+            return response;
         }, "EndTurn");
     }
 

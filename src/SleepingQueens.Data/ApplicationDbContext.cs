@@ -2,7 +2,6 @@
 using SleepingQueens.Data.Converters;
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
-using System.Reflection.Metadata;
 using System.Text.Json;
 
 namespace SleepingQueens.Data;
@@ -60,6 +59,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .Property(p => p.Type)
             .HasConversion(new PlayerTypeConverter())
             .HasMaxLength(20);
+
+        modelBuilder.Entity<Player>()
+           .Property(p => p.AILevel)
+           .HasConversion(new AILevelConverter())
+           .HasMaxLength(20);
 
         // Queen converter
         modelBuilder.Entity<Queen>()

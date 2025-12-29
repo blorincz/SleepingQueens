@@ -48,7 +48,6 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IGameEngine, SleepingQueensGameEngine>();
 builder.Services.AddScoped<IGameRepository, GameRepository>();
-builder.Services.AddScoped<ICardRepository, CardRepository>();
 
 // Add logging
 builder.Services.AddLogging();
@@ -106,5 +105,3 @@ app.MapHub<GameHub>("/gamehub").RequireCors("AllowAll"); ;
 //app.MapFallbackToFile("index.html"); // IMPORTANT: Fallback for client routes
 
 app.Run();
-
-public partial class Program { }

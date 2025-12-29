@@ -1,7 +1,6 @@
 ﻿using FluentAssertions;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
-using SleepingQueens.Server.Controllers;
 using SleepingQueens.Shared.Models.DTOs;
 using SleepingQueens.Shared.Models.Game.Enums;
 using SleepingQueens.Tests.Integration.ApiTests;

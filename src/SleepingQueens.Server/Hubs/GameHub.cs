@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using SleepingQueens.Client.Pages;
 using SleepingQueens.Server.GameEngine;
 using SleepingQueens.Server.Logging;
 using SleepingQueens.Shared.Models.DTOs;
@@ -85,20 +84,9 @@ public class GameHub(
 
             if (result.Success)
             {
-                // Hub responsibilities only
                 await MapPlayerConnectionAsync(result.JoinedPlayerId, Context.ConnectionId);
                 await Groups.AddToGroupAsync(Context.ConnectionId, result.GameId.ToString());
-
-                // Notify all players using reusable method
-                await NotifyAllPlayersAsync(
-                    result.GameId,
-                    "PlayerJoined",
-                    new PlayerJoinedEvent
-                    {
-                        PlayerId = result.JoinedPlayerId,
-                        PlayerName = result.JoinedPlayerName,
-                        TotalPlayers = result.TotalPlayers
-                    });
+                await NotifyPlayerJoinedAsync(result.GameId, result.JoinedPlayerId, result.JoinedPlayerName, result.TotalPlayers);
             }
 
             return result.ToApiResponse();

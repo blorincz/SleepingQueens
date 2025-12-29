@@ -259,7 +259,7 @@
             if (response.Success && response.Data != null)
             {
                 Navigation.NavigateTo($"/lobby/{gameCode.ToUpperInvariant()}" +
-                    $"?playerId={response.Data.PlayerId}" +
+                    $"?playerId={response.Data.JoinedPlayerId}" +
                     $"&gameId={response.Data.GameId}");
             }
             else
