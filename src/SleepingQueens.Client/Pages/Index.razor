@@ -2,6 +2,7 @@
 @using SleepingQueens.Client.Services
 @using SleepingQueens.Shared.Models.DTOs
 @using SleepingQueens.Shared.Models.Game
+@using System.Text.RegularExpressions
 @inject ISignalRService SignalRService
 @inject NavigationManager Navigation
 
@@ -223,11 +224,11 @@
     }
 
     // Validation Properties
-    private bool CannotCreateGame => string.IsNullOrWhiteSpace(PlayerName) && !string.IsNullOrEmpty(nameValidation);
+    private bool CannotCreateGame => string.IsNullOrWhiteSpace(PlayerName) || !string.IsNullOrEmpty(nameValidation);
 
-    private bool CannotJoinGame => string.IsNullOrWhiteSpace(PlayerName) &&
-                         string.IsNullOrWhiteSpace(GameCode) &&
-                         !string.IsNullOrEmpty(nameValidation) &&
+    private bool CannotJoinGame => string.IsNullOrWhiteSpace(PlayerName) ||
+                         string.IsNullOrWhiteSpace(GameCode) ||
+                         !string.IsNullOrEmpty(nameValidation) ||
                          !string.IsNullOrEmpty(gameCodeValidation);
 
     // Lifecycle
@@ -320,7 +321,7 @@
         }
 
         // Check if it's alphanumeric
-        if (!System.Text.RegularExpressions.Regex.IsMatch(code, @"^[A-Z0-9]{6}$"))
+        if (!Regex.IsMatch(code.ToUpper(), @"^[A-Z0-9]{6}$"))
         {
             return "Game code must be 6 uppercase letters or numbers";
         }
