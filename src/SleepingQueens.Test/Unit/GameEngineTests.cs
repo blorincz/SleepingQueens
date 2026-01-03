@@ -15,15 +15,15 @@ namespace SleepingQueens.Tests.Unit;
 public class GameEngineTests
 {
     private readonly Mock<IGameRepository> _mockGameRepository;
-    private readonly Mock<ILogger<SleepingQueensGameEngine>> _mockLogger;
-    private readonly SleepingQueensGameEngine _gameEngine;
+    private readonly Mock<ILogger<GameEngine>> _mockLogger;
+    private readonly GameEngine _gameEngine;
 
     public GameEngineTests()
     {
         _mockGameRepository = new Mock<IGameRepository>();
-        _mockLogger = new Mock<ILogger<SleepingQueensGameEngine>>();
+        _mockLogger = new Mock<ILogger<GameEngine>>();
 
-        _gameEngine = new SleepingQueensGameEngine(
+        _gameEngine = new GameEngine(
             _mockGameRepository.Object,
             _mockLogger.Object);
     }

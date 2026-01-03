@@ -128,17 +128,35 @@ else
                         <div class="discard" title="Discard Pile">
                             @if (gameState.DiscardPile?.Count > 0)
                             {
-                                <!-- Show last discarded card if available -->
+                                <!-- Show the last discarded card on top -->
                                 <div class="discard-card">
                                     <CardDisplay Card="lastDiscardedCard"
                                                  AdditionalClasses="discarded-card"
-                                                 IsClickable="false" />
+                                                 IsClickable="true"
+                                                 OnCardClick="ShowDiscardHistory" />
                                 </div>
+
+                                // <!-- Show stack indicator for cards underneath -->
+                                // @if (gameState.DiscardPile.Count > 1)
+                                // {
+                                //     <div class="card-stack">
+                                //         @for (int i = 0; i < Math.Min(3, gameState.DiscardPile.Count - 1); i++)
+                                //         {
+                                //             <div class="stacked-card" style="transform: translate(@(i * 2)px, @(i * 2)px);"></div>
+                                //         }
+                                //         @if (gameState.DiscardPile.Count > 4)
+                                //         {
+                                //             <div class="stack-count">+@(gameState.DiscardPile.Count - 4)</div>
+                                //         }
+                                //     </div>
+                                // }
                             }
                             else
                             {
                                 <div class="discard-pile-empty">Discard</div>
                             }
+
+                            
                         </div>
                     </div>
 
@@ -313,6 +331,35 @@ else
             </div>
         </div>
     }
+
+    <!-- Discard History Modal -->
+    @if (showDiscardHistory && gameState?.DiscardPile?.Count > 0)
+    {
+        {
+            <div class="discard-history-backdrop" @onclick="HideDiscardHistory"></div>
+        }
+
+        <div class="discard-history-popup">
+            <div class="popup-header">
+                <h6>Discard History</h6>
+                <button class="btn-close" @onclick="HideDiscardHistory"></button>
+            </div>
+            <div class="popup-content">
+                @if (gameState != null)
+                {
+                    List<CardDto> reversePile = gameState.DiscardPile.Reverse<CardDto>().ToList();
+                    @foreach (var card in gameState.DiscardPile)
+                    {
+                        <div class="history-item">
+                            <CardDisplay Card="card"
+                                         AdditionalClasses="history-card"
+                                         IsClickable="false" />
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
 }
 
 @code {
@@ -333,18 +380,15 @@ else
     private string actionStatus = string.Empty;
     private bool showChatModal = false;
     private bool isBeingAttacked = false;
-
-    // Selected opponent for the tab view
     private Guid? selectedOpponentId;
     private PlayerDto? selectedOpponent;
-
     private string currentPlayerName = string.Empty;
     private int currentPlayerScore = 0;
     private List<CardDto> currentPlayerHand = new();
     private List<QueenDto> currentPlayerQueens = new();
     private CardDto? lastDiscardedCard;
-
     public string lastErrorMessage { get; set; } = string.Empty;
+    private bool showDiscardHistory = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -431,8 +475,7 @@ else
     {
         if (gameState?.DiscardPile?.Count > 0)
         {
-            // Get last discarded card - you might need to adjust based on your data structure
-            lastDiscardedCard = null; // TODO: Set from discard pile
+            lastDiscardedCard = gameState?.DiscardPile?.Last();
         }
         else
         {
@@ -627,6 +670,21 @@ else
         }
     }
 
+    private void ShowDiscardHistory()
+    {
+        if (gameState?.DiscardPile?.Count > 0)
+        {
+            showDiscardHistory = true;
+            StateHasChanged();
+        }
+    }
+
+    private void HideDiscardHistory()
+    {
+        showDiscardHistory = false;
+        StateHasChanged();
+    }
+
     // ========== GAME ACTION VALIDATION ==========
     private bool CanPlaySelectedCard()
     {
@@ -789,8 +847,6 @@ else
     {
         if (!CanDiscardSelected() || !_currentGameId.HasValue) return;
 
-        // TODO: Implement discard API call
-        // This will depend on your server implementation
         var response = await SignalRService.DiscardCardsAsync(_currentGameId.Value, selectedCards);
         if (!response.Success)
         {
@@ -799,6 +855,10 @@ else
         else
         {
             actionStatus = "Cards discarded successfully!";
+            if (response.Data != null)
+            {
+                UpdateGameState(response.Data);
+            }
         }
     }
 
@@ -896,6 +956,7 @@ else
     {
         await InvokeAsync(() =>
         {
+            showDiscardHistory = false;
             UpdateGameState(newState);
             selectedCards.Clear();
             selectedQueenId = null;

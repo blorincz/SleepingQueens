@@ -277,6 +277,15 @@ public class GameRepository(ApplicationDbContext context) : BaseRepository<Game>
         await _context.SaveChangesAsync();
     }
 
+    public async Task<List<GameCard>> GetCardsForGameAsync(Guid gameId)
+    {
+        return await _context.GameCards
+            .Include(gc => gc.Card)
+            .Where(gc => gc.GameId == gameId)
+            .OrderBy(gc => gc.Position)
+            .ToListAsync();
+    }
+
     public async Task<List<GameCard>> GetDeckCardsAsync(Guid gameId)
     {
         return await _context.GameCards

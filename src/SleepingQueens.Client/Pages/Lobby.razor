@@ -3,6 +3,7 @@
 @using SleepingQueens.Client.Components
 @using SleepingQueens.Client.Services
 @using SleepingQueens.Shared.Models.DTOs
+@using SleepingQueens.Shared.Models.Events
 @using SleepingQueens.Shared.Models.Game.Enums
 @inject ISignalRService SignalRService
 @inject NavigationManager Navigation
@@ -141,7 +142,7 @@
 
     private List<PlayerDto> players = new();
     private List<ChatMessageDisplay> chatMessages = new();
-    private List<PlayerInfo> aiPlayers = new();
+    private List<PlayerDto> aiPlayers = new();
     private string chatMessage = string.Empty;
     private ElementReference chatMessagesContainer;
     private bool isHost = false;

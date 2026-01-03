@@ -8,7 +8,7 @@ namespace SleepingQueens.Data.Mapping;
 public static class GameStateMapper
 {
     public static GameStateDto ToDto(Game game, List<Player> players, List<Queen> queens,
-        List<GameCard> deckCards, List<Move> moves)
+        List<GameCard> gameCards, List<Move> moves)
     {
         var sleepingQueens = queens
             .Where(q => !q.IsAwake && q.PlayerId == null)
@@ -27,10 +27,10 @@ public static class GameStateMapper
             Players = playerDtos,
             SleepingQueens = [.. sleepingQueens.Select(ToDto)],
             AwakenedQueens = [.. awakenedQueens.Select(ToDto)],
-            DeckCards = [.. deckCards
+            DeckCards = [.. gameCards
                 .Where(gc => gc.Location == CardLocation.Deck)
                 .Select(gc => ToDto(gc.Card))],
-            DiscardPile = [.. deckCards
+            DiscardPile = [.. gameCards
                 .Where(gc => gc.Location == CardLocation.Discard)
                 .Select(gc => ToDto(gc.Card))],
             RecentMoves = [.. moves

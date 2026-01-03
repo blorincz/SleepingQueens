@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using SleepingQueens.Client.Pages;
 using SleepingQueens.Server.GameEngine;
 using SleepingQueens.Server.Logging;
 using SleepingQueens.Shared.Models.DTOs;
+using SleepingQueens.Shared.Models.Events;
 using SleepingQueens.Shared.Models.Game;
 using SleepingQueens.Shared.Models.Game.Enums;
 
@@ -140,7 +142,7 @@ public class GameHub(
         }
     }
 
-    public async Task<ApiResponse> StartGameAsync(Guid gameId)
+    public async Task<ApiResponse> StartGame(Guid gameId)
     {
         try
         {
@@ -213,6 +215,32 @@ public class GameHub(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error drawing card");
+            return new ApiResponse<GameStateDto>
+            {
+                Success = false,
+                ErrorMessage = $"Error: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<ApiResponse<GameStateDto>> DiscardCards(DiscardCardsRequest request)
+    {
+        try
+        {
+            var playerId = GetPlayerId();
+            var result = await _gameEngine.DiscardCardsAsync(request.GameId, playerId, request.Cards ?? []);
+
+            if (result.Success && result.UpdatedState != null)
+            {
+                await NotifyGameStateUpdatedAsync(request.GameId, result.UpdatedState);
+                return ApiResponse<GameStateDto>.SuccessResponse(result.UpdatedState);
+            }
+
+            return ApiResponse<GameStateDto>.ErrorResponse(result.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error discarding card(s)");
             return new ApiResponse<GameStateDto>
             {
                 Success = false,

@@ -1,4 +1,4 @@
-﻿namespace SleepingQueens.Shared.Models.DTOs;
+﻿namespace SleepingQueens.Shared.Models.Events;
 
 // Events
 public class PlayerJoinedEvent

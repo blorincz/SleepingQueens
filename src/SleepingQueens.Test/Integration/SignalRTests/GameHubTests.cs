@@ -89,7 +89,7 @@ public class GameHubTests : IAsyncLifetime
         // Arrange
         var createRequest = new { PlayerName = "HostPlayer" };
         var createResponse = await _httpClient.PostAsJsonAsync("/api/games", createRequest);
-        var createdGame = await createResponse.Content.ReadFromJsonAsync<CreateGameResponseDto>();
+        var createdGame = await createResponse.Content.ReadFromJsonAsync<CreateGameResultDto>();
 
         var joinRequest = new { PlayerName = "JoiningPlayer" };
 
@@ -101,10 +101,10 @@ public class GameHubTests : IAsyncLifetime
         // Assert
         joinResponse.EnsureSuccessStatusCode();
 
-        var joinResult = await joinResponse.Content.ReadFromJsonAsync<JoinGameResponseDto>();
+        var joinResult = await joinResponse.Content.ReadFromJsonAsync<JoinGameResult>();
         joinResult.Should().NotBeNull();
         joinResult!.Success.Should().BeTrue();
         joinResult.GameId.Should().Be(createdGame.GameId);
-        joinResult.PlayerId.Should().NotBe(Guid.Empty);
+        joinResult.JoinedPlayerId.Should().NotBe(Guid.Empty);
     }
 }

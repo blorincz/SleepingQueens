@@ -46,7 +46,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped<IGameEngine, SleepingQueensGameEngine>();
+builder.Services.AddScoped<IGameEngine, GameEngine>();
 builder.Services.AddScoped<IGameRepository, GameRepository>();
 
 // Add logging

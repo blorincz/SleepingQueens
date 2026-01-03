@@ -193,4 +193,16 @@ public static partial class LoggerExtensions
         Level = LogLevel.Information,
         Message = "Client connected: {ConnectionId}")]
     public static partial void LogClientConnected(this ILogger logger, string connectionId);
+
+    [LoggerMessage(
+        EventId = 1013,
+        Level = LogLevel.Information,
+        Message = "Received player reconnection event for {PlayerName}")]
+    public static partial void LogReceivedPlayerReconnectedEvent(this ILogger logger, string playerName);
+
+    [LoggerMessage(
+        EventId = 1014,
+        Level = LogLevel.Information,
+        Message = "Player {PlayerId} reconnecting to game {GameId}")]
+    public static partial void LogReconnectingPlayer(this ILogger logger, Guid playerId, Guid gameId);
 }

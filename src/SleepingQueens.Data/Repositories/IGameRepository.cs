@@ -33,6 +33,7 @@ public interface IGameRepository
     Task DiscardCardAsync(Guid gameId, Guid cardId);
     Task<List<GameCard>> GetDiscardPileAsync(Guid gameId);
     Task<List<GameCard>> GetDeckCardsAsync(Guid gameId);
+    Task<List<GameCard>> GetCardsForGameAsync(Guid gameId);
     Task<List<Card>> GetByTypeAsync(CardType type);
     Task<IEnumerable<Card>> GetNumberCardsAsync();
     Task<IEnumerable<Card>> GetSpecialCardsAsync();

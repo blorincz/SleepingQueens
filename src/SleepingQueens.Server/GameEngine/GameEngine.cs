@@ -9,12 +9,12 @@ using System.Text.Json;
 
 namespace SleepingQueens.Server.GameEngine;
 
-public class SleepingQueensGameEngine(
+public class GameEngine(
     IGameRepository gameRepository,
-    ILogger<SleepingQueensGameEngine> logger) : IGameEngine
+    ILogger<GameEngine> logger) : IGameEngine
 {
     private readonly IGameRepository _gameRepository = gameRepository;
-    private readonly ILogger<SleepingQueensGameEngine> _logger = logger;
+    private readonly ILogger<GameEngine> _logger = logger;
 
     // ========== GAME LIFECYCLE ==========
 
@@ -171,11 +171,12 @@ public class SleepingQueensGameEngine(
         // Deal initial cards to ALL players
         await DealInitialCardsToAllPlayersAsync(gameId);
 
-        // Set first player's turn
-        if (game.Players.Count != 0)
-        {
-            await _gameRepository.UpdatePlayerTurnAsync(gameId, game.Players.ToArray()[0].Id, true);
-        }
+        // Set first player's turn --> Host is already set as current turn during CreateGame
+        // but in the future perhaps we decide the playing order randomly.
+        //if (game.Players.Count != 0)
+        //{
+        //    await _gameRepository.UpdatePlayerTurnAsync(gameId, game.Players.ToArray()[0].Id, true);
+        //}
 
         await _gameRepository.UpdateAsync(game);
 
@@ -1003,15 +1004,15 @@ public class SleepingQueensGameEngine(
         var game = await _gameRepository.GetByIdAsync(gameId) ?? throw new ArgumentException($"Game {gameId} not found");
         var players = await _gameRepository.GetPlayersInGameAsync(gameId);
         var allQueens = await _gameRepository.GetQueensForGameAsync(gameId);
-        var deckCards = await _gameRepository.GetDeckCardsAsync(gameId);
+        var gameCards = await _gameRepository.GetCardsForGameAsync(gameId);
         var moves = await _gameRepository.GetGameMovesAsync(gameId, 10);
 
         return GameStateMapper.ToDto(
             game,
             [.. players],
             [.. allQueens],
-            [.. deckCards],
-            [.. moves]);  // Pass entity moves
+            [.. gameCards],
+            [.. moves]);
     }
 
     public async Task<Player> GetCurrentPlayerAsync(Guid gameId)

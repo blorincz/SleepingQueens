@@ -16,17 +16,17 @@
 
     <!-- Fixed buttons in lower left -->
     <div class="action-buttons">
-        <button class="btn btn-primary btn-lg" @onclick="CreateNewGame">
+        <button class="btn btn-primary btn-lg" @onclick="ShowCreateGameModal">
             Create New Game
         </button>
-        <button class="btn btn-secondary btn-lg" @onclick="JoinExistingGame">
+        <button class="btn btn-secondary btn-lg" @onclick="ShowJoinGameModal">
             Join Existing Game
         </button>
         <button class="btn btn-outline-light btn-lg" @onclick="ViewRules">
             How to Play
         </button>
     </div>
-    
+
     @if (showRulesModal)
     {
         <div class="modal-backdrop show" @onclick="CloseRulesModal"></div>
@@ -39,15 +39,15 @@
                     </div>
                     <div class="modal-body text-center">
                         <div class="rules-image-container">
-                            <img src="Images/SQEngRules.jpg" 
-                                 alt="Sleeping Queens Game Rules" 
+                            <img src="Images/SQEngRules.jpg"
+                                 alt="Sleeping Queens Game Rules"
                                  class="rules-image img-fluid"
                                  @onclick="ZoomRules" />
                             @if (isZoomed)
                             {
                                 <div class="zoom-overlay" @onclick="UnzoomRules">
                                     <img src="Images/SQEngRules.jpg"
-                                         alt="Sleeping Queens Game Rules - Zoomed" 
+                                         alt="Sleeping Queens Game Rules - Zoomed"
                                          class="rules-image-zoomed" />
                                     <div class="zoom-instructions">Click anywhere to zoom out</div>
                                 </div>
@@ -64,37 +64,51 @@
         </div>
     }
 
-    @if (showCreateModal)
+    @if (showCreateGameModal)
     {
-        <div class="modal-backdrop show"></div>
+        <div class="modal-backdrop show" @onclick="CloseCreateGameModal"></div>
         <div class="modal show d-block" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Create New Game</h5>
-                        <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+                        <button type="button" class="btn-close" @onclick="CloseCreateGameModal"></button>
                     </div>
                     <div class="modal-body">
                         <div class="mb-3">
-                            <label for="playerName" class="form-label">Your Name</label>
-                            <input type="text" class="form-control" id="playerName" 
-                                   @bind="playerName" placeholder="Enter your name" />
+                            <label for="PlayerName" class="form-label">Your Name</label>
+                            <input type="text" class="form-control" id="PlayerName"
+                                   @bind="PlayerName" @bind:event="oninput"
+                                   placeholder="Enter your name" maxlength="20" />
+                            @if (!string.IsNullOrEmpty(nameValidation))
+                            {
+                                <div class="validation-message">@nameValidation</div>
+                            }
                         </div>
                         <div class="mb-3">
-                            <label for="maxPlayers" class="form-label">Max Players</label>
-                            <input type="number" class="form-control" id="maxPlayers" 
-                                   @bind="maxPlayers" min="2" max="6" />
+                            <label for="maxPlayers">Max Players:</label>
+                            <select id="maxPlayers" @bind="maxPlayers" class="form-control">
+                                <option value="2">2 Players</option>
+                                <option value="3">3 Players</option>
+                                <option value="4" selected>4 Players</option>
+                                <option value="5">5 Players</option>
+                                <option value="6">6 Players</option>
+                            </select>
                         </div>
                         <div class="mb-3">
-                            <label for="targetScore" class="form-label">Target Score</label>
-                            <input type="number" class="form-control" id="targetScore" 
-                                   @bind="targetScore" min="10" max="100" />
+                            <label for="targetScore">Target Score:</label>
+                            <select id="targetScore" @bind="targetScore" class="form-control">
+                                <option value="20">20 Points</option>
+                                <option value="30">30 Points</option>
+                                <option value="40" selected>40 Points</option>
+                                <option value="50">50 Points</option>
+                                <option value="60">60 Points</option>
+                            </select>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
-                        <button type="button" class="btn btn-primary" @onclick="SubmitCreateGame" 
-                                @disabled="@(string.IsNullOrWhiteSpace(playerName))">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseCreateGameModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" disabled=@CannotCreateGame>
                             Create Game
                         </button>
                     </div>
@@ -102,8 +116,8 @@
             </div>
         </div>
     }
-    
-    @if (showJoinModal)
+
+    @if (showJoinGameModal)
     {
         <div class="modal-backdrop show"></div>
         <div class="modal show d-block" tabindex="-1">
@@ -111,29 +125,55 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Join Existing Game</h5>
-                        <button type="button" class="btn-close" @onclick="CloseJoinModal"></button>
+                        <button type="button" class="btn-close" @onclick="CloseJoinGameModal"></button>
                     </div>
                     <div class="modal-body">
                         <div class="mb-3">
                             <label for="joinPlayerName" class="form-label">Your Name</label>
-                            <input type="text" class="form-control" id="joinPlayerName" 
-                                   @bind="joinPlayerName" placeholder="Enter your name" />
+                            <input type="text" class="form-control" id="joinPlayerName"
+                                   @bind="PlayerName" @bind:event="oninput" placeholder="Enter your name" />
+                            @if (!string.IsNullOrEmpty(nameValidation))
+                            {
+                                <div class="validation-message">@nameValidation</div>
+                            }
                         </div>
                         <div class="mb-3">
                             <label for="gameCode" class="form-label">Game Code</label>
-                            <input type="text" class="form-control" id="gameCode" 
-                                   @bind="gameCode" placeholder="Enter 6-digit game code" 
+                            <input type="text" class="form-control" id="gameCode"
+                                   @bind="GameCode" @bind:event="oninput"  placeholder="Enter 6-digit game code"
                                    maxlength="6" style="text-transform:uppercase" />
+                            @if (!string.IsNullOrEmpty(gameCodeValidation))
+                            {
+                                <div class="validation-message">@gameCodeValidation</div>
+                            }
                         </div>
                         @if (!string.IsNullOrEmpty(joinErrorMessage))
                         {
                             <div class="alert alert-danger">@joinErrorMessage</div>
                         }
+                        <!-- Active Games List -->
+                        @if (activeGames != null && activeGames.Any())
+                        {
+                            <div class="active-games">
+                                <h6>Available Games:</h6>
+                                <div class="games-list">
+                                    @foreach (var game in activeGames)
+                                    {
+                                        <div class="game-item" @onclick="() => SelectGame(game.GameCode)">
+                                            <div class="game-code">@game.GameCode</div>
+                                            <div class="game-info">
+                                                <span class="players">@game.PlayerCount/@game.MaxPlayers players</span>
+                                                <span class="status">@game.Status</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @onclick="CloseJoinModal">Cancel</button>
-                        <button type="button" class="btn btn-primary" @onclick="SubmitJoinGame" 
-                                @disabled="@(string.IsNullOrWhiteSpace(joinPlayerName) || string.IsNullOrWhiteSpace(gameCode))">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseJoinGameModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="SubmitJoinGame" disabled=@CannotJoinGame>
                             Join Game
                         </button>
                     </div>
@@ -144,49 +184,154 @@
 </div>
 
 @code {
-    private bool showCreateModal = false;
-    private bool showJoinModal = false;
+    private bool showCreateGameModal = false;
     private bool showRulesModal = false;
     private bool isZoomed = false;
-    private string playerName = string.Empty;
-    private string joinPlayerName = string.Empty;
-    private string gameCode = string.Empty;
-    private string joinErrorMessage = string.Empty;
+
+    private string nameValidation = string.Empty;
     private int maxPlayers = 4;
     private int targetScore = 40;
 
+    // Join Game Modal State
+    private bool showJoinGameModal = false;
+    private string gameCodeValidation = string.Empty;
+    private string joinErrorMessage = string.Empty;
+
+    // Active Games
+    private List<ActiveGameInfo>? activeGames;
+
+    private string _GameCode = string.Empty;
+    public string GameCode
+    {
+        get => _GameCode;
+        set
+        {
+            _GameCode = value;
+            GameCodeValidation();
+        }
+    }
+
+    private string _PlayerName = string.Empty;
+    public string PlayerName
+    {
+        get => _PlayerName;
+        set
+        {
+            _PlayerName = value;
+            NameValidation();
+        }
+    }
+
+    // Validation Properties
+    private bool CannotCreateGame => string.IsNullOrWhiteSpace(PlayerName) && !string.IsNullOrEmpty(nameValidation);
+
+    private bool CannotJoinGame => string.IsNullOrWhiteSpace(PlayerName) &&
+                         string.IsNullOrWhiteSpace(GameCode) &&
+                         !string.IsNullOrEmpty(nameValidation) &&
+                         !string.IsNullOrEmpty(gameCodeValidation);
+
+    // Lifecycle
     protected override async Task OnInitializedAsync()
     {
         await SignalRService.ConnectAsync();
+        await LoadActiveGames();
     }
 
-    private void CreateNewGame()
+    // Modal Management
+    private void ShowCreateGameModal()
     {
-        showCreateModal = true;
+        showCreateGameModal = true;
+        PlayerName = string.Empty;
+        nameValidation = string.Empty;
+        StateHasChanged();
     }
 
-    private void JoinExistingGame()
+    private void CloseCreateGameModal()
     {
-        showJoinModal = true;
+        showCreateGameModal = false;
+        StateHasChanged();
     }
 
+    private void ShowJoinGameModal()
+    {
+        showJoinGameModal = true;
+        PlayerName = string.Empty;
+        nameValidation = string.Empty;
+        GameCode = string.Empty;
+        gameCodeValidation = string.Empty;
+        StateHasChanged();
+    }
+
+    private void CloseJoinGameModal()
+    {
+        showJoinGameModal = false;
+        StateHasChanged();
+    }
+
+    // Validation Methods
+    private void NameValidation()
+    {
+        nameValidation = ValidatePlayerName(PlayerName);
+        StateHasChanged();
+    }
+
+    private void GameCodeValidation()
+    {
+        gameCodeValidation = ValidateGameCode(GameCode);
+        StateHasChanged();
+    }
+
+    private string ValidatePlayerName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Name is required";
+        }
+
+        if (name.Length < 3)
+        {
+            return "Name must be at least 3 characters";
+        }
+
+        if (name.Length > 20)
+        {
+            return "Name must be 20 characters or less";
+        }
+
+        // Check for valid characters (optional)
+        if (!System.Text.RegularExpressions.Regex.IsMatch(name, @"^[a-zA-Z0-9\s\-_]+$"))
+        {
+            return "Name can only contain letters, numbers, spaces, hyphens, and underscores";
+        }
+
+        return string.Empty;
+    }
+
+    private string ValidateGameCode(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return "Game code is required";
+        }
+
+        if (code.Length != 6)
+        {
+            return "Game code must be 6 characters";
+        }
+
+        // Check if it's alphanumeric
+        if (!System.Text.RegularExpressions.Regex.IsMatch(code, @"^[A-Z0-9]{6}$"))
+        {
+            return "Game code must be 6 uppercase letters or numbers";
+        }
+
+        return string.Empty;
+    }
+
+    // Rules Modal
     private void ViewRules()
     {
         showRulesModal = true;
-    }
-    
-    private void CloseCreateModal()
-    {
-        showCreateModal = false;
-        playerName = string.Empty;
-    }
-    
-    private void CloseJoinModal()
-    {
-        showJoinModal = false;
-        joinPlayerName = string.Empty;
-        gameCode = string.Empty;
-        joinErrorMessage = string.Empty;
     }
 
     private void CloseRulesModal()
@@ -209,23 +354,121 @@
     {
         isZoomed = false;
     }
-    
+
+    // Action Methods
+    private async Task CreateGame()
+    {
+        if (CannotCreateGame) return;
+
+        try
+        {
+            var settings = new GameSettings
+            {
+                MaxPlayers = maxPlayers,
+                TargetScore = targetScore
+            };
+
+            var request = new CreateGameRequest
+            {
+                PlayerName = PlayerName.Trim(),
+                Settings = settings
+            };
+
+            var response = await SignalRService.CreateGameAsync(request);
+
+            if (response.Success && response.Data != null)
+            {
+                // Navigate to lobby
+                Navigation.NavigateTo($"/lobby/{response.Data.GameCode}?playerId={response.Data.PlayerId}&gameId={response.Data.GameId}");
+            }
+            else
+            {
+                // Show error
+                Console.WriteLine($"Failed to create game: {response.ErrorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating game: {ex.Message}");
+        }
+    }
+
+    private async Task JoinGame()
+    {
+        if (CannotJoinGame) return;
+
+        try
+        {
+            var request = new JoinGameRequest
+            {
+                PlayerName = PlayerName.Trim(),
+                GameCode = GameCode.ToUpper()
+            };
+
+            var response = await SignalRService.JoinGameAsync(request);
+
+            if (response.Success && response.Data != null)
+            {
+                // Navigate to lobby
+                Navigation.NavigateTo($"/lobby/{GameCode}?playerId={response.Data.PlayerId}&gameId={response.Data.GameId}");
+            }
+            else
+            {
+                // Show error
+                Console.WriteLine($"Failed to join game: {response.ErrorMessage}");
+                gameCodeValidation = response.ErrorMessage ?? "Failed to join game";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error joining game: {ex.Message}");
+            gameCodeValidation = $"Error: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private void SelectGame(string selectedGameCode)
+    {
+        GameCode = selectedGameCode;
+        GameCodeValidation();
+    }
+
+    private async Task LoadActiveGames()
+    {
+        try
+        {
+            var response = await SignalRService.GetActiveGamesAsync();
+            if (response.Success && response.Data != null)
+            {
+                activeGames = response.Data
+                    .Where(g => g.Status == GameStatus.Waiting && g.PlayerCount < g.MaxPlayers)
+                    .OrderByDescending(g => g.CreatedAt)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading active games: {ex.Message}");
+        }
+    }
+
     private async Task SubmitCreateGame()
     {
         try
         {
             var request = new CreateGameRequest
             {
-                PlayerName = playerName,
+                PlayerName = PlayerName,
                 Settings = new GameSettings
                 {
                     MaxPlayers = maxPlayers,
                     TargetScore = targetScore
                 }
             };
-            
+
             var response = await SignalRService.CreateGameAsync(request);
-            
+
             if (response.Success && response.Data != null)
             {
                 Navigation.NavigateTo($"/lobby/{response.Data.GameCode}" +
@@ -243,23 +486,23 @@
             joinErrorMessage = $"Error: {ex.Message}";
         }
     }
-    
+
     private async Task SubmitJoinGame()
     {
         try
         {
             var request = new JoinGameRequest
             {
-                PlayerName = joinPlayerName,
-                GameCode = gameCode.ToUpperInvariant()
+                PlayerName = PlayerName,
+                GameCode = GameCode.ToUpperInvariant()
             };
-            
+
             var response = await SignalRService.JoinGameAsync(request);
-            
+
             if (response.Success && response.Data != null)
             {
-                Navigation.NavigateTo($"/lobby/{gameCode.ToUpperInvariant()}" +
-                    $"?playerId={response.Data.JoinedPlayerId}" +
+                Navigation.NavigateTo($"/lobby/{GameCode.ToUpperInvariant()}" +
+                    $"?playerId={response.Data.PlayerId}" +
                     $"&gameId={response.Data.GameId}");
             }
             else

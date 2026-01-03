@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using SleepingQueens.Client.Events;
 using SleepingQueens.Client.Logging;
 using SleepingQueens.Shared.Models.DTOs;
+using SleepingQueens.Shared.Models.Events;
 using SleepingQueens.Shared.Models.Game.Enums;
 using System.Text.Json;
 
@@ -29,7 +30,7 @@ public interface ISignalRService : IAsyncDisposable
 
     // Game Management
     Task<ApiResponse<CreateGameResult>> CreateGameAsync(CreateGameRequest request);
-    Task<ApiResponse<JoinGameResult>> JoinGameAsync(JoinGameRequest request);
+    Task<ApiResponse<JoinGameResultDto>> JoinGameAsync(JoinGameRequest request);
     Task<ApiResponse> StartGameAsync(Guid gameId);
 
     // Game Actions
@@ -48,6 +49,7 @@ public interface ISignalRService : IAsyncDisposable
     // Utility
     Task<ApiResponse> AddAIPlayerAsync(Guid gameId, AILevel level);
     Task<ApiResponse> RemovePlayerAsync(Guid gameId, Guid playerId);
+    Task<ApiResponse> ReconnectPlayerAsync(Guid gameId, Guid playerId);
 }
 
 public class SignalRService(
@@ -100,7 +102,7 @@ public class SignalRService(
 
             // Build new connection
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl($"{baseUrl}gamehub") // This will now be correct
+                .WithUrl($"{baseUrl}gamehub")
                 .WithAutomaticReconnect(new SignalRRetryPolicy(_logger))
                 .AddJsonProtocol(options =>
                 {
@@ -195,6 +197,12 @@ public class SignalRService(
             await OnChatMessage.InvokeAsync((chatMessage.PlayerName, chatMessage.Message));
         });
 
+        _hubConnection.On<PlayerReconnectedEvent>("PlayerReconnected", async (reconnectEvent) =>
+        {
+            _logger.LogReceivedPlayerReconnectedEvent(reconnectEvent.PlayerName);
+            // You might want to add this event to your async events if needed
+        });
+
         _hubConnection.Closed += async (error) =>
         {
             var status = error != null ? $"Closed with error: {error.Message}" : "Closed";
@@ -224,7 +232,7 @@ public class SignalRService(
 
     public async Task<ApiResponse<CreateGameResult>> CreateGameAsync(CreateGameRequest request)
     {
-        return await ExecuteHubMethodAsync<ApiResponse<CreateGameResult>>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
@@ -237,16 +245,17 @@ public class SignalRService(
         }, "CreateGame");
     }
 
-    public async Task<ApiResponse<JoinGameResult>> JoinGameAsync(JoinGameRequest request)
+    public async Task<ApiResponse<JoinGameResultDto>> JoinGameAsync(JoinGameRequest request)
     {
-        return await ExecuteHubMethodAsync<ApiResponse<JoinGameResult>>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
             _logger.LogPlayerJoiningGame(request.PlayerName, request.GameCode);
 
-            var response = await _hubConnection.InvokeAsync<ApiResponse<JoinGameResult>>("JoinGame", request);
+            // FIXED: Changed to JoinGameResultDto to match GameHub
+            var response = await _hubConnection.InvokeAsync<ApiResponse<JoinGameResultDto>>("JoinGame", request);
             await NotifyGameActionResponse(response);
             return response;
         }, "JoinGame");
@@ -261,12 +270,10 @@ public class SignalRService(
 
             _logger.LogGameStarted(gameId);
 
-            // Map from StartGameResponse to ApiResponse
-            var response = await _hubConnection.InvokeAsync<ApiResponse>("StartGameAsync", gameId);
-
+            var response = await _hubConnection.InvokeAsync<ApiResponse>("StartGame", gameId);
             await NotifyGameActionResponse(response);
             return response;
-        }, "StartGameAsync");
+        }, "StartGame");
     }
 
     #endregion
@@ -275,7 +282,7 @@ public class SignalRService(
 
     public async Task<ApiResponse<GameStateDto>> PlayCardAsync(PlayCardRequest request)
     {
-        return await ExecuteHubMethodAsync<ApiResponse<GameStateDto>>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
@@ -298,7 +305,6 @@ public class SignalRService(
             _logger.LogDrawCard(gameId);
 
             var response = await _hubConnection.InvokeAsync<ApiResponse<GameStateDto>>("DrawCard", gameId);
-
             await NotifyGameActionResponse(response);
             return response;
         }, "DrawCard");
@@ -314,7 +320,6 @@ public class SignalRService(
             _logger.LogEndingTurn(gameId);
 
             var response = await _hubConnection.InvokeAsync<ApiResponse<GameStateDto>>("EndTurn", gameId);
-
             await NotifyGameActionResponse(response);
             return response;
         }, "EndTurn");
@@ -322,7 +327,7 @@ public class SignalRService(
 
     public async Task<ApiResponse<GameStateDto>> DiscardCardsAsync(Guid gameId, IEnumerable<Guid> cardIds)
     {
-        return await ExecuteHubMethodAsync<ApiResponse<GameStateDto>>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
@@ -330,9 +335,11 @@ public class SignalRService(
             int cardCount = cardIds.Count();
             _logger.LogDiscardingCards(cardCount, gameId);
 
-            // Note: You need to add a DiscardCards method to your GameHub
-            // For now, returning a placeholder response
-            throw new NotImplementedException("DiscardCards method not implemented in GameHub");
+            var response = await _hubConnection.InvokeAsync<ApiResponse<GameStateDto>>("DiscardCards", 
+                new DiscardCardsRequest { GameId = gameId, Cards = cardIds});
+            await NotifyGameActionResponse(response);
+            return response;
+
         }, "DiscardCards");
     }
 
@@ -342,7 +349,7 @@ public class SignalRService(
 
     public async Task<ApiResponse<GameStateDto>> GetGameStateAsync(Guid gameId)
     {
-        return await ExecuteHubMethodAsync<ApiResponse<GameStateDto>>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
@@ -356,20 +363,32 @@ public class SignalRService(
 
     public async Task<ApiResponse<IEnumerable<ActiveGameInfo>>> GetActiveGamesAsync()
     {
-        return await ExecuteHubMethodAsync<ApiResponse<IEnumerable<ActiveGameInfo>>>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
             _logger.LogDebug("Getting active games list");
 
-            var games = await _hubConnection.InvokeAsync<IEnumerable<ActiveGameInfo>>("GetActiveGames");
+            // FIXED: Changed return type to match new ActiveGamesResult
+            var response = await _hubConnection.InvokeAsync<ActiveGamesResult>("GetActiveGames");
 
-            return new ApiResponse<IEnumerable<ActiveGameInfo>>
+            if (response.Success)
             {
-                Success = true,
-                Data = games
-            };
+                return new ApiResponse<IEnumerable<ActiveGameInfo>>
+                {
+                    Success = true,
+                    Data = response.Games
+                };
+            }
+            else
+            {
+                return new ApiResponse<IEnumerable<ActiveGameInfo>>
+                {
+                    Success = false,
+                    ErrorMessage = response.ErrorMessage
+                };
+            }
         }, "GetActiveGames");
     }
 
@@ -379,7 +398,7 @@ public class SignalRService(
 
     public async Task<ApiResponse> SendMessageAsync(Guid gameId, string message)
     {
-        return await ExecuteHubMethodAsync<ApiResponse>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
@@ -401,28 +420,47 @@ public class SignalRService(
 
     public async Task<ApiResponse> AddAIPlayerAsync(Guid gameId, AILevel level)
     {
-        return await ExecuteHubMethodAsync<ApiResponse>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
             _logger.LogAddingAIPlayer(level, gameId);
 
-            return await _hubConnection.InvokeAsync<ApiResponse>("AddAIPlayer", gameId, level);
+            var response = await _hubConnection.InvokeAsync<ApiResponse>("AddAIPlayer", gameId, level);
+            await NotifyGameActionResponse(response);
+            return response;
         }, "AddAIPlayer");
     }
 
     public async Task<ApiResponse> RemovePlayerAsync(Guid gameId, Guid playerId)
     {
-        return await ExecuteHubMethodAsync<ApiResponse>(async () =>
+        return await ExecuteHubMethodAsync(async () =>
         {
             if (_hubConnection == null)
                 throw new HubException("Not connected to SignalR hub");
 
             _logger.LogRemovingPlayer(playerId, gameId);
 
-            return await _hubConnection.InvokeAsync<ApiResponse>("RemovePlayer", gameId, playerId);
+            var response = await _hubConnection.InvokeAsync<ApiResponse>("RemovePlayer", gameId, playerId);
+            await NotifyGameActionResponse(response);
+            return response;
         }, "RemovePlayer");
+    }
+
+    public async Task<ApiResponse> ReconnectPlayerAsync(Guid gameId, Guid playerId)
+    {
+        return await ExecuteHubMethodAsync(async () =>
+        {
+            if (_hubConnection == null)
+                throw new HubException("Not connected to SignalR hub");
+
+            _logger.LogReconnectingPlayer(playerId, gameId);
+
+            var response = await _hubConnection.InvokeAsync<ApiResponse>("ReconnectPlayer", gameId, playerId);
+            await NotifyGameActionResponse(response);
+            return response;
+        }, "ReconnectPlayer");
     }
 
     #endregion

@@ -36,6 +36,17 @@
     visibility: hidden;
 }
 
+.name-input {
+    margin: 20px 0;
+    max-width: 300px;
+}
+
+.validation-message {
+    color: #dc3545;
+    font-size: 14px;
+    margin-top: 5px;
+}
+
 /* Action buttons fixed to lower left */
 .action-buttons {
     position: absolute; /* Absolute within home-container */
@@ -85,6 +96,17 @@
         .action-buttons .btn-outline-light:hover {
             background: rgba(255, 255, 255, 0.1);
         }
+
+/*.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}*/
+
+    .action-buttons button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 
 /* ========== CARD DISPLAY COMPONENT ========== */
 .card {
@@ -705,7 +727,130 @@
 .discard {
     opacity: 0.9;
 }
+    .discard .card {
+        width: 96px;
+        height: 134px;
+        max-width: 96px;
+        max-height: 134px;
+        margin: 0 auto;
+    }
 
+.discard-history-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9998;
+    backdrop-filter: blur(2px);
+}
+
+.discard-history-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80vh;
+    max-height: 500px;
+    background: white;
+    border: 2px solid #4299e1;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+    flex-direction: column;
+}
+
+.popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: linear-gradient(135deg, #4299e1, #3182ce);
+    color: white;
+    border-radius: 7px 7px 0 0;
+    border-bottom: 2px solid #2c5282;
+}
+
+    .popup-header h6 {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .popup-header .btn-close:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+    }
+
+.popup-content {
+    padding: 15px;
+    max-height: 400px;
+    flex-grow: 1;
+    background: #f7fafc;
+    overflow-x: auto; /* Horizontal scrollbar when needed */
+    overflow-y: hidden; /* Hide vertical scrollbar */
+    display: flex;
+    flex-direction: row; /* Changed from column to row */
+    gap: 15px; /* Space between cards */
+    align-items: flex-start; /* Align cards at the top */
+    padding-bottom: 25px; /* Extra space at bottom for scrollbar */
+}
+
+.history-item {
+    display: flex;
+    flex-direction: column; /* Stack card and info vertically */
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.2s;
+    min-width: 120px; /* Minimum width for each card item */
+    flex-shrink: 0; /* Prevent cards from shrinking */
+}
+
+    .history-item:hover {
+        background: #edf2f7;
+    }
+
+    .history-item:last-child {
+        margin-bottom: 0;
+    }
+
+.history-card {
+    width: 100px; /* Fixed width for consistency */
+    height: 140px; /* Fixed height to match aspect ratio */
+    flex-shrink: 0;
+}
+
+.history-card-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #2d3748;
+}
+
+/* Custom scrollbar styling */
+.popup-content::-webkit-scrollbar {
+    height: 10px;
+}
+
+.popup-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 5px;
+}
+
+.popup-content::-webkit-scrollbar-thumb {
+    background: #4299e1;
+    border-radius: 5px;
+}
+
+    .popup-content::-webkit-scrollbar-thumb:hover {
+        background: #3182ce;
+    }
 /* ========== PLAYER AREA ========== */
 .player-area {
     background: rgba(255, 255, 255, 0.95);
@@ -1080,5 +1225,20 @@
 
     .card-value {
         font-size: 2rem;
+    }
+}
+@media (max-width: 500px) {
+    .discard-history-popup {
+        width: 90vw;
+        max-height: 70vh;
+    }
+
+    .history-item {
+        gap: 10px;
+    }
+
+    .history-card {
+        width: 50px;
+        height: 70px;
     }
 }
